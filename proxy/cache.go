@@ -18,7 +18,7 @@ import (
 )
 
 // defaultCacheSize is the size of cache in bytes by default.
-const defaultCacheSize = 64 * 1024
+const defaultCacheSize = 1024 * 1024
 
 // cache is used to cache requests and used upstreams.
 type cache struct {
@@ -107,7 +107,7 @@ func (ci *cacheItem) pack() (packed []byte) {
 }
 
 // optimisticTTL is the default TTL for expired cached responses in seconds.
-const optimisticTTL = 10
+const optimisticTTL = 12 * 3600
 
 // unpackItem converts the data into cacheItem using req as a request message.
 // expired is true if the item exists but expired.  The expired cached items are
@@ -164,7 +164,7 @@ func (c *cache) unpackItem(data []byte, req *dns.Msg) (ci *cacheItem, expired bo
 // initCache initializes cache if it's enabled.
 func (p *Proxy) initCache() {
 	if !p.CacheEnabled {
-		log.Info("dnsproxy: cache: disabled")
+		//log.Info("dnsproxy: cache: disabled")
 
 		return
 	}
@@ -362,17 +362,17 @@ func cacheTTL(m *dns.Msg) (ttl uint32) {
 	case m == nil:
 		return 0
 	case m.Truncated:
-		log.Debug("dnsproxy: cache: truncated message; not caching")
+		//log.Debug("dnsproxy: cache: truncated message; not caching")
 
 		return 0
 	case len(m.Question) != 1:
-		log.Debug("dnsproxy: cache: message with wrong number of questions; not caching")
+		//log.Debug("dnsproxy: cache: message with wrong number of questions; not caching")
 
 		return 0
 	default:
 		ttl = calculateTTL(m)
 		if ttl == 0 {
-			log.Debug("dnsproxy: cache: ttl calculated to be 0; not caching")
+			//log.Debug("dnsproxy: cache: ttl calculated to be 0; not caching")
 
 			return 0
 		}
@@ -384,17 +384,17 @@ func cacheTTL(m *dns.Msg) (ttl uint32) {
 			return ttl
 		}
 
-		log.Debug("dnsproxy: cache: not a cacheable noerror response; not caching")
+		//log.Debug("dnsproxy: cache: not a cacheable noerror response; not caching")
 	case dns.RcodeNameError:
 		if isCacheableNegative(m) {
 			return ttl
 		}
 
-		log.Debug("dnsproxy: cache: not a cacheable nxdomain response; not caching")
+		//log.Debug("dnsproxy: cache: not a cacheable nxdomain response; not caching")
 	case dns.RcodeServerFailure:
 		return ttl
 	default:
-		log.Debug("dnsproxy: cache: response code %s; not caching", dns.RcodeToString[rcode])
+		//log.Debug("dnsproxy: cache: response code %s; not caching", dns.RcodeToString[rcode])
 	}
 
 	return 0

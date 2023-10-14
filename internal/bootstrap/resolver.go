@@ -2,12 +2,10 @@ package bootstrap
 
 import (
 	"context"
-	"net"
-	"net/netip"
-	"time"
-
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
+	"net"
+	"net/netip"
 )
 
 // Resolver resolves the hostnames to IP addresses.
@@ -81,14 +79,14 @@ func lookupAsync(ctx context.Context, r Resolver, host string, resCh chan<- *loo
 
 // lookup tries to lookup ip of host with r.
 func lookup(ctx context.Context, r Resolver, host string) (addrs []netip.Addr, err error) {
-	start := time.Now()
+	//start := time.Now()
 	addrs, err = r.LookupNetIP(ctx, "ip", host)
-	elapsed := time.Since(start)
-	if err != nil {
-		log.Debug("parallel lookup: lookup for %s failed in %s: %s", host, elapsed, err)
-	} else {
-		log.Debug("parallel lookup: lookup for %s succeeded in %s: %s", host, elapsed, addrs)
-	}
+	//elapsed := time.Since(start)
+	//if err != nil {
+	//	log.Debug("parallel lookup: lookup for %s failed in %s: %s", host, elapsed, err)
+	//} else {
+	//	log.Debug("parallel lookup: lookup for %s succeeded in %s: %s", host, elapsed, addrs)
+	//}
 
 	return addrs, err
 }

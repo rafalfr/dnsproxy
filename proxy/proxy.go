@@ -182,7 +182,7 @@ func (p *Proxy) Init() (err error) {
 	p.initCache()
 
 	if p.MaxGoroutines > 0 {
-		log.Info("dnsproxy: max goroutines is set to %d", p.MaxGoroutines)
+		//log.Info("dnsproxy: max goroutines is set to %d", p.MaxGoroutines)
 
 		p.requestGoroutinesSema, err = newChanSemaphore(p.MaxGoroutines)
 		if err != nil {
@@ -203,7 +203,7 @@ func (p *Proxy) Init() (err error) {
 	}
 
 	if p.UpstreamMode == UModeFastestAddr {
-		log.Info("dnsproxy: fastest ip is enabled")
+		//log.Info("dnsproxy: fastest ip is enabled")
 
 		p.fastestAddr = fastip.NewFastestAddr()
 		if timeout := p.FastestPingTimeout; timeout > 0 {
@@ -507,21 +507,21 @@ func (p *Proxy) replyFromUpstream(d *DNSContext) (ok bool, err error) {
 		return false, fmt.Errorf("selecting general upstream: %w", upstream.ErrNoUpstreams)
 	}
 
-	start := time.Now()
+	//start := time.Now()
 
 	// Perform the DNS request.
 	resp, u, err := p.exchange(req, upstreams)
 	if dns64Ups := p.performDNS64(req, resp, upstreams); dns64Ups != nil {
 		u = dns64Ups
 	} else if p.isBogusNXDomain(resp) {
-		log.Debug("proxy: replying from upstream: response contains bogus-nxdomain ip")
+		//log.Debug("proxy: replying from upstream: response contains bogus-nxdomain ip")
 		resp = p.genWithRCode(req, dns.RcodeNameError)
 	}
 
-	log.Debug("proxy: replying from upstream: rtt is %s", time.Since(start))
+	//log.Debug("proxy: replying from upstream: rtt is %s", time.Since(start))
 
 	if err != nil && p.Fallbacks != nil {
-		log.Debug("proxy: replying from upstream: using fallback due to %s", err)
+		//log.Debug("proxy: replying from upstream: using fallback due to %s", err)
 
 		upstreams = p.Fallbacks.getUpstreamsForDomain(req.Question[0].Name)
 		if len(upstreams) == 0 {
@@ -660,7 +660,7 @@ func (dctx *DNSContext) processECS(cliIP net.IP) {
 		if ones, _ := ecs.Mask.Size(); ones != 0 {
 			dctx.ReqECS = ecs
 
-			log.Debug("dnsproxy: passing through ecs: %s", dctx.ReqECS)
+			//log.Debug("dnsproxy: passing through ecs: %s", dctx.ReqECS)
 
 			return
 		}
@@ -679,7 +679,7 @@ func (dctx *DNSContext) processECS(cliIP net.IP) {
 		// Section 6.
 		dctx.ReqECS = setECS(dctx.Req, cliIP, 0)
 
-		log.Debug("dnsproxy: setting ecs: %s", dctx.ReqECS)
+		//log.Debug("dnsproxy: setting ecs: %s", dctx.ReqECS)
 	}
 }
 

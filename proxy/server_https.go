@@ -98,7 +98,7 @@ func (p *Proxy) createHTTPSListeners() (err error) {
 //     "application/dns-message";
 //   - http.StatusMethodNotAllowed if request method is not GET or POST.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Tracef("Incoming HTTPS request on %s", r.URL)
+	//log.Tracef("Incoming HTTPS request on %s", r.URL)
 
 	var buf []byte
 	var err error
@@ -139,7 +139,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	req := &dns.Msg{}
 	if err = req.Unpack(buf); err != nil {
-		log.Tracef("msg.Unpack: %s", err)
+		//log.Tracef("msg.Unpack: %s", err)
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 
 		return
@@ -157,9 +157,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if prx != nil {
 		ip, _ := netutil.IPAndPortFromAddr(prx)
-		log.Debug("request came from proxy server %s", prx)
+		//log.Debug("request came from proxy server %s", prx)
 		if !p.proxyVerifier.Contains(ip) {
-			log.Debug("proxy %s is not trusted, using original remote addr", ip)
+			//log.Debug("proxy %s is not trusted, using original remote addr", ip)
 			d.Addr = prx
 		}
 	}
@@ -249,7 +249,7 @@ func remoteAddr(r *http.Request) (addr, prx net.Addr, err error) {
 	h3 := r.Context().Value(http3.ServerContextKey) != nil
 
 	if realIP := realIPFromHdrs(r); realIP != nil {
-		log.Tracef("Using IP address from HTTP request: %s", realIP)
+		//log.Tracef("Using IP address from HTTP request: %s", realIP)
 
 		// TODO(a.garipov): Add port if we can get it from headers like
 		// X-Real-Port, X-Forwarded-Port, etc.

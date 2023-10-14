@@ -85,7 +85,7 @@ func (p *Proxy) udpPacketLoop(conn *net.UDPConn, requestGoroutinesSema semaphore
 		}
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				log.Debug("dnsproxy: udp connection %s closed", conn.LocalAddr())
+				//log.Debug("dnsproxy: udp connection %s closed", conn.LocalAddr())
 			} else {
 				log.Error("dnsproxy: reading from udp: %s", err)
 			}
@@ -97,12 +97,12 @@ func (p *Proxy) udpPacketLoop(conn *net.UDPConn, requestGoroutinesSema semaphore
 
 // udpHandlePacket processes the incoming UDP packet and sends a DNS response
 func (p *Proxy) udpHandlePacket(packet []byte, localIP net.IP, remoteAddr *net.UDPAddr, conn *net.UDPConn) {
-	log.Debug("dnsproxy: handling new udp packet from %s", remoteAddr)
+	//log.Debug("dnsproxy: handling new udp packet from %s", remoteAddr)
 
 	req := &dns.Msg{}
 	err := req.Unpack(packet)
 	if err != nil {
-		log.Error("dnsproxy: unpacking udp packet: %s", err)
+		//log.Error("dnsproxy: unpacking udp packet: %s", err)
 
 		return
 	}
@@ -114,7 +114,7 @@ func (p *Proxy) udpHandlePacket(packet []byte, localIP net.IP, remoteAddr *net.U
 
 	err = p.handleDNSRequest(d)
 	if err != nil {
-		log.Debug("dnsproxy: handling dns (proto %s) request: %s", d.Proto, err)
+		//log.Debug("dnsproxy: handling dns (proto %s) request: %s", d.Proto, err)
 	}
 }
 

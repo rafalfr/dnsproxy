@@ -11,6 +11,9 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+var numQueries uint64 = 0
+var numAnswers uint64 = 0
+
 // startListeners configures and starts listener loops
 func (p *Proxy) startListeners(ctx context.Context) error {
 	err := p.createUDPListeners(ctx)
@@ -84,14 +87,14 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 	p.logDNSMessage(d.Req)
 
 	if d.Req.Response {
-		log.Debug("Dropping incoming Reply packet from %s", d.Addr.String())
+		//log.Debug("Dropping incoming Reply packet from %s", d.Addr.String())
 		return nil
 	}
 
 	if p.BeforeRequestHandler != nil {
 		ok, err := p.BeforeRequestHandler(p, d)
 		if err != nil {
-			log.Error("Error in the BeforeRequestHandler: %s", err)
+			//log.Error("Error in the BeforeRequestHandler: %s", err)
 			d.Res = p.genServerFailure(d.Req)
 			p.respond(d)
 			return nil
@@ -103,12 +106,12 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 
 	// ratelimit based on IP only, protects CPU cycles and outbound connections
 	if d.Proto == ProtoUDP && p.isRatelimited(d.Addr) {
-		log.Tracef("Ratelimiting %v based on IP only", d.Addr)
+		//log.Tracef("Ratelimiting %v based on IP only", d.Addr)
 		return nil // do nothing, don't reply, we got ratelimited
 	}
 
 	if len(d.Req.Question) != 1 {
-		log.Debug("got invalid number of questions: %v", len(d.Req.Question))
+		//log.Debug("got invalid number of questions: %v", len(d.Req.Question))
 		d.Res = p.genServerFailure(d.Req)
 	}
 
@@ -182,7 +185,7 @@ func (p *Proxy) setMinMaxTTL(r *dns.Msg) {
 		newTTL := respectTTLOverrides(originalTTL, p.CacheMinTTL, p.CacheMaxTTL)
 
 		if originalTTL != newTTL {
-			log.Debug("Override TTL from %d to %d", originalTTL, newTTL)
+			//log.Debug("Override TTL from %d to %d", originalTTL, newTTL)
 			rr.Header().Ttl = newTTL
 		}
 	}
@@ -215,8 +218,22 @@ func (p *Proxy) logDNSMessage(m *dns.Msg) {
 	}
 
 	if m.Response {
-		log.Tracef("OUT: %s", m)
+		if len(m.Answer) > 0 {
+			numAnswers++
+			log.Printf("A#%-12d%s", numAnswers, m.Answer[0].String())
+			//_, err := log.Writer().Write([]byte(fmt.Sprintf("A#%-12d%s\n", num_answers, m.Answer[0].String())))
+			//if err != nil {
+			//	return
+			//}
+		}
 	} else {
-		log.Tracef("IN: %s", m)
+		if len(m.Question) > 0 {
+			numQueries++
+			log.Printf("Q#%-12d%s", numQueries, m.Question[0].Name)
+			//_, err := log.Writer().Write([]byte(fmt.Sprintf("\nQ#%-12d%s\n", num_queries, m.Question[0].Name)))
+			//if err != nil {
+			//	return
+			//}
+		}
 	}
 }

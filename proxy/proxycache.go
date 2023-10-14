@@ -1,11 +1,14 @@
 package proxy
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
 )
+
+var numCacheHits uint64 = 0
 
 // replyFromCache tries to get the response from general or subnet cache.
 // Returns true on success.
@@ -17,13 +20,13 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 
 	if !p.Config.EnableEDNSClientSubnet {
 		ci, expired, key = p.cache.get(d.Req)
-		hitMsg = "serving cached response"
+		hitMsg = fmt.Sprintf("C#%-12dserving cached response", numCacheHits)
 	} else if d.ReqECS != nil {
 		ci, expired, key = p.cache.getWithSubnet(d.Req, d.ReqECS)
-		hitMsg = "serving response from subnet cache"
+		hitMsg = fmt.Sprintf("C#%-12dserving response from subnet cache", numCacheHits)
 	} else {
 		ci, expired, key = p.cache.get(d.Req)
-		hitMsg = "serving response from general cache"
+		hitMsg = fmt.Sprintf("C#%-12dserving response from general cache", numCacheHits)
 	}
 
 	if hit = ci != nil; !hit {
@@ -33,7 +36,9 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 	d.Res = ci.m
 	d.CachedUpstreamAddr = ci.u
 
-	log.Debug("dnsproxy: cache: %s", hitMsg)
+	//log.Debug("dnsproxy: cache: %s", hitMsg)
+	numCacheHits++
+	log.Printf(hitMsg)
 
 	if p.cache.optimistic && expired {
 		// Build a reduced clone of the current context to avoid data race.
@@ -75,7 +80,7 @@ func (p *Proxy) cacheResp(d *DNSContext) {
 		// TODO(a.meshkov):  The whole response MUST be dropped if ECS in it
 		// doesn't correspond.
 		if !ecs.IP.Mask(ecs.Mask).Equal(d.ReqECS.IP.Mask(d.ReqECS.Mask)) || ones != reqOnes {
-			log.Debug("dnsproxy: cache: bad response: ecs %s does not match %s", ecs, d.ReqECS)
+			//log.Debug("dnsproxy: cache: bad response: ecs %s does not match %s", ecs, d.ReqECS)
 
 			return
 		}
@@ -90,7 +95,7 @@ func (p *Proxy) cacheResp(d *DNSContext) {
 			ecs.IP = ecs.IP.Mask(ecs.Mask)
 		}
 
-		log.Debug("dnsproxy: cache: ecs option in response: %s", ecs)
+		//log.Debug("dnsproxy: cache: ecs option in response: %s", ecs)
 
 		p.cache.setWithSubnet(d.Res, d.Upstream, ecs)
 	case d.ReqECS != nil:

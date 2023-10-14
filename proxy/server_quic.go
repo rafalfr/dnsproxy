@@ -88,9 +88,9 @@ func (p *Proxy) quicPacketLoop(l *quic.EarlyListener, requestGoroutinesSema sema
 		conn, err := l.Accept(context.Background())
 		if err != nil {
 			if isQUICErrorForDebugLog(err) {
-				log.Debug("accepting quic conn: closed or timed out: %s", err)
+				//log.Debug("accepting quic conn: closed or timed out: %s", err)
 			} else {
-				log.Error("accepting quic conn: %s", err)
+				//log.Error("accepting quic conn: %s", err)
 			}
 
 			break
@@ -118,9 +118,9 @@ func (p *Proxy) handleQUICConnection(conn quic.Connection, requestGoroutinesSema
 		stream, err := conn.AcceptStream(context.Background())
 		if err != nil {
 			if isQUICErrorForDebugLog(err) {
-				log.Debug("accepting quic stream: closed or timed out: %s", err)
+				//log.Debug("accepting quic stream: closed or timed out: %s", err)
 			} else {
-				log.Error("accepting quic stream: %s", err)
+				//log.Error("accepting quic stream: %s", err)
 			}
 
 			// Close the connection to make sure resources are freed.
@@ -186,7 +186,7 @@ func (p *Proxy) handleQUICStream(stream quic.Stream, conn quic.Connection) {
 	}
 
 	if err != nil {
-		log.Error("unpacking quic packet: %s", err)
+		//log.Error("unpacking quic packet: %s", err)
 		closeQUICConn(conn, DoQCodeProtocolError)
 
 		return
@@ -283,7 +283,7 @@ func validQUICMsg(req *dns.Msg) (ok bool) {
 		for _, option := range opt.Option {
 			// Check for EDNS TCP keepalive option
 			if option.Option() == dns.EDNS0TCPKEEPALIVE {
-				log.Debug("client sent EDNS0 TCP keepalive option")
+				//log.Debug("client sent EDNS0 TCP keepalive option")
 
 				return false
 			}
@@ -310,9 +310,9 @@ func logShortQUICRead(err error) {
 	}
 
 	if isQUICErrorForDebugLog(err) {
-		log.Debug("reading from quic stream: closed or timeout: %s", err)
+		//log.Debug("reading from quic stream: closed or timeout: %s", err)
 	} else {
-		log.Error("reading from quic stream: %s", err)
+		//log.Error("reading from quic stream: %s", err)
 	}
 }
 
@@ -363,11 +363,11 @@ func isQUICErrorForDebugLog(err error) (ok bool) {
 
 // closeQUICConn quietly closes the QUIC connection.
 func closeQUICConn(conn quic.Connection, code quic.ApplicationErrorCode) {
-	log.Debug("closing quic conn %s with code %d", conn.LocalAddr(), code)
+	//log.Debug("closing quic conn %s with code %d", conn.LocalAddr(), code)
 
 	err := conn.CloseWithError(code, "")
 	if err != nil {
-		log.Debug("closing quic connection with code %d: %s", code, err)
+		//log.Debug("closing quic connection with code %d: %s", code, err)
 	}
 }
 

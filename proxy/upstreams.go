@@ -113,7 +113,7 @@ func ParseUpstreamsConfig(upstreamConfig []string, options *upstream.Options) (*
 					host = host[len("*."):]
 
 					subdomainsOnlyExclusions.Add(host)
-					log.Debug("domain %s is added to exclusions list", host)
+					//log.Debug("domain %s is added to exclusions list", host)
 
 					subdomainsOnlyUpstreams[host] = append(subdomainsOnlyUpstreams[host], dnsUpstream)
 				} else {
@@ -123,8 +123,8 @@ func ParseUpstreamsConfig(upstreamConfig []string, options *upstream.Options) (*
 				domainReservedUpstreams[host] = append(domainReservedUpstreams[host], dnsUpstream)
 			}
 
-			log.Debug("Upstream %d: %s is reserved for next domains: %s",
-				i, dnsUpstream.Address(), strings.Join(hosts, ", "))
+			//log.Debug("Upstream %d: %s is reserved for next domains: %s",
+			//	i, dnsUpstream.Address(), strings.Join(hosts, ", "))
 		}
 	}
 

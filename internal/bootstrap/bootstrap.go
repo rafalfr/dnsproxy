@@ -12,7 +12,6 @@ import (
 
 	proxynetutil "github.com/AdguardTeam/dnsproxy/internal/netutil"
 	"github.com/AdguardTeam/golibs/errors"
-	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
 )
 
@@ -77,7 +76,7 @@ func NewDialContext(timeout time.Duration, addrs ...string) (h DialHandler) {
 
 	l := len(addrs)
 	if l == 0 {
-		log.Debug("bootstrap: no addresses to dial")
+		//log.Debug("bootstrap: no addresses to dial")
 
 		return func(_ context.Context, _, _ string) (conn net.Conn, err error) {
 			return nil, errors.Error("no addresses")
@@ -91,19 +90,19 @@ func NewDialContext(timeout time.Duration, addrs ...string) (h DialHandler) {
 
 		// Return first succeeded connection.  Note that we're using addrs
 		// instead of what's passed to the function.
-		for i, addr := range addrs {
-			log.Debug("bootstrap: dialing %s (%d/%d)", addr, i+1, l)
+		for _, addr := range addrs {
+			//log.Debug("bootstrap: dialing %s (%d/%d)", addr, i+1, l)
 
-			start := time.Now()
+			//start := time.Now()
 			conn, err = dialer.DialContext(ctx, network, addr)
-			elapsed := time.Since(start)
+			//elapsed := time.Since(start)
 			if err == nil {
-				log.Debug("bootstrap: connection to %s succeeded in %s", addr, elapsed)
+				//log.Debug("bootstrap: connection to %s succeeded in %s", addr, elapsed)
 
 				return conn, nil
 			}
 
-			log.Debug("bootstrap: connection to %s failed in %s: %s", addr, elapsed, err)
+			//log.Debug("bootstrap: connection to %s failed in %s: %s", addr, elapsed, err)
 			errs = append(errs, err)
 		}
 
