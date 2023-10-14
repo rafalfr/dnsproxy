@@ -8,7 +8,7 @@
 # bottom to make sure they take effect.
 *.out
 *.test
-/.idea/*
+.idea/
 /bin/
 build
 dnsproxy
