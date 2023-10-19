@@ -617,17 +617,17 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 		addDO(dctx.Req)
 	}
 
-	// TODO (rafalfr):
+	// TODO (rafalfr): nothing
 	var ok bool
 	replyFromUpstream := true
 	for _, rr := range dctx.Req.Question {
 
 		if t := rr.Qtype; t == dns.TypeA || t == dns.TypeAAAA {
 
-			queryDomain := strings.TrimSuffix(rr.Name, ".")
+			queryDomain := strings.Trim(rr.Name, "\n ")
+			queryDomain = strings.TrimSuffix(rr.Name, ".")
 			if Bdm.checkDomain(queryDomain) == true {
 				r := GenEmptyMessage(dctx.Req, dns.RcodeSuccess, retryNoError)
-				//r := new(dns.Msg)
 				r.Id = dctx.Req.Id
 				if t == dns.TypeA {
 					ra := new(dns.A)
@@ -647,23 +647,6 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 				replyFromUpstream = false
 				ok = true
 			}
-			//if main,
-			//log.Info(" query doamin: " + strings.TrimSuffix(rr.Name, "."))
-
-			//if _, ok := dctx.Res.Answer[0].(*dns.A); ok {
-			//r := new(dns.Msg)
-			//r.Id = dctx.Req.Id
-			//ra := new(dns.A)
-			//ra.Hdr = dns.RR_Header{Name: dctx.Req.Question[0].Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 3600}
-			//ra.A = net.ParseIP("0.0.0.0")
-			//r.Answer = make([]dns.RR, 1)
-			//r.Answer[0] = ra
-			//r.Question = dctx.Req.Question
-			//dctx.Res = r
-			//t.A = net.ParseIP("0.0.0.0")
-			//log.Debug(t.A.String())
-			//}
-
 		}
 	}
 	if replyFromUpstream {

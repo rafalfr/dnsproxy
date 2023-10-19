@@ -1,5 +1,7 @@
 package proxy
 
+// TODO (rafalfr): nothing
+
 import (
 	"bufio"
 	"github.com/AdguardTeam/dnsproxy/utils"
@@ -34,6 +36,8 @@ type BlockedDomainsManager struct {
 func newBlockedDomainsManger() *BlockedDomainsManager {
 
 	p := BlockedDomainsManager{}
+	p.mux.Lock()
+	defer p.mux.Unlock()
 	p.hosts = make(map[string]*Set)
 	p.numDomains = 0
 	return &p

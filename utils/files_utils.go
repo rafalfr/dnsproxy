@@ -1,5 +1,7 @@
 package utils
 
+// TODO (rafalfr): nothing
+
 import (
 	"os"
 	"time"

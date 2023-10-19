@@ -14,7 +14,9 @@ max-go-routines: 10
 ratelimit: 0
 udp-buf-size: 0
 upstream:
-  - "quic://p0.freedns.controld.com"
+  - "quic://x-hagezi-ultimate.freedns.controld.com"
+  - "quic://uncensored.dns.dnswarden.com"
+  - "quic://dnsforge.de"
   - "tls://dns.quad9.net"
   - "tls://1dot1dot1dot1.cloudflare-dns.com"
   - "tls://security-filter-dns.cleanbrowsing.org"
@@ -25,4 +27,7 @@ cache-optimistic: true
 blocked_domains_lists:
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/tif.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/ultimate.txt"
+  - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/dyndns.txt"
+  - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/hoster.txt"
+  - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/gambling.txt"
 output: "/tmp/dnsproxy.log"

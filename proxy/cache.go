@@ -18,7 +18,7 @@ import (
 )
 
 // defaultCacheSize is the size of cache in bytes by default.
-const defaultCacheSize = 1024 * 1024
+const defaultCacheSize = 2 * 1024 * 1024
 
 // cache is used to cache requests and used upstreams.
 type cache struct {

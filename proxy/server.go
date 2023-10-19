@@ -223,19 +223,11 @@ func (p *Proxy) logDNSMessage(m *dns.Msg) {
 		if len(m.Answer) > 0 {
 			numAnswers++
 			log.Printf("A#%-12d%s", numAnswers, m.Answer[0].String())
-			//_, err := log.Writer().Write([]byte(fmt.Sprintf("A#%-12d%s\n", num_answers, m.Answer[0].String())))
-			//if err != nil {
-			//	return
-			//}
 		}
 	} else {
 		if len(m.Question) > 0 {
 			numQueries++
 			log.Printf("Q#%-12d%s", numQueries, m.Question[0].Name)
-			//_, err := log.Writer().Write([]byte(fmt.Sprintf("\nQ#%-12d%s\n", num_queries, m.Question[0].Name)))
-			//if err != nil {
-			//	return
-			//}
 		}
 	}
 }
