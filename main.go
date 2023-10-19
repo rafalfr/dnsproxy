@@ -190,6 +190,10 @@ type Options struct {
 
 	// Print DNSProxy version (just for the help)
 	Version bool `yaml:"version" long:"version" description:"Prints the program version"`
+
+	// TODO (rafalfr): nothing to do
+	// blocked domains lists
+	BlockedDomainsLists []string `yaml:"blocked_domains_lists" long:"blocked_domains_lists" description:"An blokced domains list to be used (can be specified multiple times)."`
 }
 
 const (
@@ -274,9 +278,14 @@ func run(options *Options) {
 		log.Fatalf("cannot start the DNS proxy due to %s", err)
 	}
 
-	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
-	<-signalChannel
+	// TODO(rafalfr): nie działa sygnał
+	signal.Notify(proxy.TerminationSignal, syscall.SIGINT, syscall.SIGTERM)
+	go proxy.UpdateBlockedDomains(proxy.Bdm, options.BlockedDomainsLists)
+
+	//signalChannel := make(chan os.Signal, 1)
+	//signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
+	//<-signalChannel
+	<-proxy.FinishSignal
 
 	// Stopping the proxy.
 	err = dnsProxy.Stop()

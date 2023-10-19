@@ -11,6 +11,7 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+// TODO (rafalfr): nothing to do
 var numQueries uint64 = 0
 var numAnswers uint64 = 0
 
@@ -217,6 +218,7 @@ func (p *Proxy) logDNSMessage(m *dns.Msg) {
 		return
 	}
 
+	// TODO (rafalfr): nothing to do
 	if m.Response {
 		if len(m.Answer) > 0 {
 			numAnswers++

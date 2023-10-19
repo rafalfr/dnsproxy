@@ -5,10 +5,12 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"github.com/AdguardTeam/dnsproxy/utils"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -479,7 +481,15 @@ func (p *Proxy) selectUpstreams(d *DNSContext) (upstreams []upstream.Upstream) {
 		}
 
 		// Use configured.
-		return getUpstreams(p.UpstreamConfig, host)
+		upstreams = getUpstreams(p.UpstreamConfig, host)
+
+		// TODO (rafalfr): use random upstream server if flag in configuration set
+		if upstreams != nil && len(upstreams) > 0 {
+			randomIndex, _ := utils.GetRandomValue(0, int64(len(upstreams)))
+			upstreams = upstreams[randomIndex : randomIndex+1]
+		}
+
+		return upstreams
 	}
 
 	// Use private upstreams.
@@ -503,6 +513,7 @@ func (p *Proxy) replyFromUpstream(d *DNSContext) (ok bool, err error) {
 	req := d.Req
 
 	upstreams := p.selectUpstreams(d)
+
 	if len(upstreams) == 0 {
 		return false, fmt.Errorf("selecting general upstream: %w", upstream.ErrNoUpstreams)
 	}
@@ -547,6 +558,8 @@ func (p *Proxy) handleExchangeResult(d *DNSContext, req, resp *dns.Msg, u upstre
 		return
 	}
 
+	// TODO (rafalfr): print only if configured
+	log.Info("reply from %s", u.Address())
 	d.Upstream = u
 	d.Res = resp
 
@@ -604,8 +617,58 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 		addDO(dctx.Req)
 	}
 
+	// TODO (rafalfr):
 	var ok bool
-	ok, err = p.replyFromUpstream(dctx)
+	replyFromUpstream := true
+	for _, rr := range dctx.Req.Question {
+
+		if t := rr.Qtype; t == dns.TypeA || t == dns.TypeAAAA {
+
+			queryDomain := strings.TrimSuffix(rr.Name, ".")
+			if Bdm.checkDomain(queryDomain) == true {
+				r := GenEmptyMessage(dctx.Req, dns.RcodeSuccess, retryNoError)
+				//r := new(dns.Msg)
+				r.Id = dctx.Req.Id
+				if t == dns.TypeA {
+					ra := new(dns.A)
+					ra.Hdr = dns.RR_Header{Name: queryDomain + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 36000}
+					ra.A = net.ParseIP("0.0.0.0")
+					r.Answer = make([]dns.RR, 1)
+					r.Answer[0] = ra
+				} else {
+					ra := new(dns.AAAA)
+					ra.Hdr = dns.RR_Header{Name: queryDomain + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 36000}
+					ra.AAAA = net.ParseIP("::")
+					r.Answer = make([]dns.RR, 1)
+					r.Answer[0] = ra
+				}
+				r.Question = dctx.Req.Question
+				dctx.Res = r
+				replyFromUpstream = false
+				ok = true
+			}
+			//if main,
+			//log.Info(" query doamin: " + strings.TrimSuffix(rr.Name, "."))
+
+			//if _, ok := dctx.Res.Answer[0].(*dns.A); ok {
+			//r := new(dns.Msg)
+			//r.Id = dctx.Req.Id
+			//ra := new(dns.A)
+			//ra.Hdr = dns.RR_Header{Name: dctx.Req.Question[0].Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 3600}
+			//ra.A = net.ParseIP("0.0.0.0")
+			//r.Answer = make([]dns.RR, 1)
+			//r.Answer[0] = ra
+			//r.Question = dctx.Req.Question
+			//dctx.Res = r
+			//t.A = net.ParseIP("0.0.0.0")
+			//log.Debug(t.A.String())
+			//}
+
+		}
+	}
+	if replyFromUpstream {
+		ok, err = p.replyFromUpstream(dctx)
+	}
 
 	// Don't cache the responses having CD flag, just like Dnsmasq does.  It
 	// prevents the cache from being poisoned with unvalidated answers which may
