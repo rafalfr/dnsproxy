@@ -594,32 +594,14 @@ const defaultUDPBufSize = 2048
 // upstream servers.
 func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 
-	var ok bool
-	replyFromUpstream := true
-
 	if p.EnableEDNSClientSubnet {
 		dctx.processECS(p.EDNSAddr)
 	}
 
 	dctx.calcFlagsAndSize()
 
-	// Use cache only if it's enabled and the query doesn't use custom upstream.
-	// Also don't lookup the cache for responses with DNSSEC checking disabled
-	// since only validated responses are cached and those may be not the
-	// desired result for user specifying CD flag.
-	cacheWorks := p.cacheWorks(dctx)
-	if cacheWorks {
-		if p.replyFromCache(dctx) {
-			// Complete the response from cache.
-			dctx.scrub()
-
-			return nil
-		}
-
-		// On cache miss request for DNSSEC from the upstream to cache it
-		// afterwards.
-		addDO(dctx.Req)
-	}
+	var ok bool
+	replyFromUpstream := true
 
 	// TODO (rafalfr): nothing
 	for _, rr := range dctx.Req.Question {
@@ -654,17 +636,35 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 		}
 	}
 	if replyFromUpstream {
-		ok, err = p.replyFromUpstream(dctx)
-	}
+		// Use cache only if it's enabled and the query doesn't use custom upstream.
+		// Also don't lookup the cache for responses with DNSSEC checking disabled
+		// since only validated responses are cached and those may be not the
+		// desired result for user specifying CD flag.
+		cacheWorks := p.cacheWorks(dctx)
+		if cacheWorks {
+			if p.replyFromCache(dctx) {
+				// Complete the response from cache.
+				dctx.scrub()
 
-	// Don't cache the responses having CD flag, just like Dnsmasq does.  It
-	// prevents the cache from being poisoned with unvalidated answers which may
-	// differ from validated ones.
-	//
-	// See https://github.com/imp/dnsmasq/blob/770bce967cfc9967273d0acfb3ea018fb7b17522/src/forward.c#L1169-L1172.
-	if cacheWorks && ok && !dctx.Res.CheckingDisabled {
-		// Cache the response with DNSSEC RRs.
-		p.cacheResp(dctx)
+				return nil
+			}
+
+			// On cache miss request for DNSSEC from the upstream to cache it
+			// afterwards.
+			addDO(dctx.Req)
+		}
+
+		ok, err = p.replyFromUpstream(dctx)
+
+		// Don't cache the responses having CD flag, just like Dnsmasq does.  It
+		// prevents the cache from being poisoned with unvalidated answers which may
+		// differ from validated ones.
+		//
+		// See https://github.com/imp/dnsmasq/blob/770bce967cfc9967273d0acfb3ea018fb7b17522/src/forward.c#L1169-L1172.
+		if cacheWorks && ok && !dctx.Res.CheckingDisabled {
+			// Cache the response with DNSSEC RRs.
+			p.cacheResp(dctx)
+		}
 	}
 
 	// It is possible that the response is nil if the upstream hasn't been
