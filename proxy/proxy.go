@@ -559,7 +559,7 @@ func (p *Proxy) handleExchangeResult(d *DNSContext, req, resp *dns.Msg, u upstre
 	}
 
 	// TODO (rafalfr): print only if configured
-	log.Info("reply from %s", u.Address())
+	log.Info("reply from %s for %s", u.Address(), resp.Question[0].Name)
 	d.Upstream = u
 	d.Res = resp
 
@@ -631,13 +631,13 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 				r.Id = dctx.Req.Id
 				if t == dns.TypeA {
 					ra := new(dns.A)
-					ra.Hdr = dns.RR_Header{Name: queryDomain + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 36000}
+					ra.Hdr = dns.RR_Header{Name: queryDomain + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 3600}
 					ra.A = net.ParseIP("0.0.0.0")
 					r.Answer = make([]dns.RR, 1)
 					r.Answer[0] = ra
 				} else {
 					ra := new(dns.AAAA)
-					ra.Hdr = dns.RR_Header{Name: queryDomain + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 36000}
+					ra.Hdr = dns.RR_Header{Name: queryDomain + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 3600}
 					ra.AAAA = net.ParseIP("::")
 					r.Answer = make([]dns.RR, 1)
 					r.Answer[0] = ra
