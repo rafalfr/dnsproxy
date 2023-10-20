@@ -56,7 +56,7 @@ func genSOA(request *dns.Msg, retry uint32) []dns.RR {
 		Hdr: dns.RR_Header{
 			Name:   zone,
 			Rrtype: dns.TypeSOA,
-			Ttl:    10,
+			Ttl:    3600,
 			Class:  dns.ClassINET,
 		},
 	}

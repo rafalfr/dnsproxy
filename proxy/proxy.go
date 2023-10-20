@@ -559,7 +559,7 @@ func (p *Proxy) handleExchangeResult(d *DNSContext, req, resp *dns.Msg, u upstre
 	}
 
 	// TODO (rafalfr): print only if configured
-	log.Info("reply from %s for %s time:%d", u.Address(), resp.Question[0].Name, time.Now().Unix())
+	log.Info("reply from %s for %s", u.Address(), resp.Question[0].Name)
 	d.Upstream = u
 	d.Res = resp
 
@@ -611,7 +611,7 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 			queryDomain := strings.Trim(rr.Name, "\n ")
 			queryDomain = strings.TrimSuffix(rr.Name, ".")
 			if Bdm.checkDomain(queryDomain) == true {
-				log.Printf("Blocked domain: %s time:%d", queryDomain, time.Now().Unix())
+				//log.Printf("Blocked domain: %s time:%d", queryDomain, time.Now().Unix())
 				r := GenEmptyMessage(dctx.Req, dns.RcodeSuccess, retryNoError)
 				r.Id = dctx.Req.Id
 				if t == dns.TypeA {

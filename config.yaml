@@ -14,7 +14,7 @@ max-go-routines: 10
 ratelimit: 0
 udp-buf-size: 0
 upstream:
-  - "quic://x-hagezi-ultimate.freedns.controld.com"
+  - "quic://p0.freedns.controld.com"
   - "quic://uncensored.dns.dnswarden.com"
   - "quic://dnsforge.de"
   - "tls://dns.quad9.net"
