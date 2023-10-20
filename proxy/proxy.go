@@ -559,7 +559,7 @@ func (p *Proxy) handleExchangeResult(d *DNSContext, req, resp *dns.Msg, u upstre
 	}
 
 	// TODO (rafalfr): print only if configured
-	log.Info("reply from %s for %s", u.Address(), resp.Question[0].Name)
+	log.Info("reply from %s for %s time:%d", u.Address(), resp.Question[0].Name, time.Now().Unix())
 	d.Upstream = u
 	d.Res = resp
 
@@ -593,6 +593,10 @@ const defaultUDPBufSize = 2048
 // Resolve is the default resolving method used by the DNS proxy to query
 // upstream servers.
 func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
+
+	var ok bool
+	replyFromUpstream := true
+
 	if p.EnableEDNSClientSubnet {
 		dctx.processECS(p.EDNSAddr)
 	}
@@ -618,8 +622,6 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 	}
 
 	// TODO (rafalfr): nothing
-	var ok bool
-	replyFromUpstream := true
 	for _, rr := range dctx.Req.Question {
 
 		if t := rr.Qtype; t == dns.TypeA || t == dns.TypeAAAA {
@@ -627,6 +629,7 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 			queryDomain := strings.Trim(rr.Name, "\n ")
 			queryDomain = strings.TrimSuffix(rr.Name, ".")
 			if Bdm.checkDomain(queryDomain) == true {
+				log.Printf("Blocked domain: %s time:%d", queryDomain, time.Now().Unix())
 				r := GenEmptyMessage(dctx.Req, dns.RcodeSuccess, retryNoError)
 				r.Id = dctx.Req.Id
 				if t == dns.TypeA {
@@ -646,6 +649,7 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 				dctx.Res = r
 				replyFromUpstream = false
 				ok = true
+				err = nil
 			}
 		}
 	}

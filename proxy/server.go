@@ -222,12 +222,12 @@ func (p *Proxy) logDNSMessage(m *dns.Msg) {
 	if m.Response {
 		if len(m.Answer) > 0 {
 			numAnswers++
-			log.Printf("A#%-12d%s", numAnswers, m.Answer[0].String())
+			log.Printf("A#%-12d%s time:%d", numAnswers, m.Answer[0].String(), time.Now().Unix())
 		}
 	} else {
 		if len(m.Question) > 0 {
 			numQueries++
-			log.Printf("Q#%-12d%s", numQueries, m.Question[0].Name)
+			log.Printf("Q#%-12d%s time:%d", numQueries, m.Question[0].Name, time.Now().Unix())
 		}
 	}
 }
