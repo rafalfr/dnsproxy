@@ -20,6 +20,9 @@ func DownloadFromUrl(url string, opFilePath ...string) error {
 	} else {
 		tokens := strings.Split(url, "/")
 		filePath = tokens[len(tokens)-1]
+		if !strings.HasSuffix(filePath, ".txt") {
+			filePath += ".txt"
+		}
 	}
 
 	output, err := os.Create(filePath)

@@ -132,6 +132,9 @@ func UpdateBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string)
 
 				tokens := strings.Split(blockedDomainUrl, "/")
 				filePath := tokens[len(tokens)-1]
+				if !strings.HasSuffix(filePath, ".txt") {
+					filePath += ".txt"
+				}
 
 				fileSize, modificationTime, err := utils.GetFileInfo(filePath)
 
@@ -166,6 +169,9 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 	for _, blockedDomainUrl := range blockedDomainsUrls {
 		tokens := strings.Split(blockedDomainUrl, "/")
 		filePath := tokens[len(tokens)-1]
+		if !strings.HasSuffix(filePath, ".txt") {
+			filePath += ".txt"
+		}
 
 		ok, _ := utils.FileExists(filePath)
 		if ok {
@@ -189,6 +195,9 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 	for _, blockedDomainUrl := range blockedDomainsUrls {
 		tokens := strings.Split(blockedDomainUrl, "/")
 		filePath := tokens[len(tokens)-1]
+		if !strings.HasSuffix(filePath, ".txt") {
+			filePath += ".txt"
+		}
 
 		f, err := os.OpenFile(filePath, os.O_RDONLY, os.ModePerm)
 		if err != nil {

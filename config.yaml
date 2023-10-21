@@ -10,7 +10,7 @@ bootstrap:
 listen-addrs:
   - "0.0.0.0"
 listen-ports:
-  - 53
+  - 53000
 max-go-routines: 10
 ratelimit: 0
 udp-buf-size: 0
@@ -25,6 +25,7 @@ upstream:
   - "tls://dns.mullvad.net"
   - "tls://dns.decloudus.com"
   - "tls://max.rethinkdns.com"
+  - "https://blitz.ahadns.com/1:4.26.27"
 timeout: '10s'
 cache: true
 cache-optimistic: true
@@ -34,6 +35,8 @@ blocked_domains_lists:
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/dyndns.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/hoster.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/gambling.txt"
+  - "https://big.oisd.nl/domainswild"
+  - "https://o0.pages.dev/Pro/wildcards.txt"
 fallback:
     - "quic://x-hagezi-ultimate.freedns.controld.com"
 output: "/tmp/dnsproxy.log"
