@@ -35,8 +35,8 @@ blocked_domains_lists:
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/dyndns.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/hoster.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/gambling.txt"
-  - "https://big.oisd.nl/domainswild"
-  - "https://o0.pages.dev/Pro/wildcards.txt"
+  #- "https://big.oisd.nl/domainswild"
+  #- "https://o0.pages.dev/Pro/wildcards.txt"
 fallback:
     - "quic://x-hagezi-ultimate.freedns.controld.com"
 output: "/tmp/dnsproxy.log"
