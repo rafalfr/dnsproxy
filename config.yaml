@@ -3,6 +3,7 @@
 # To use it within dnsproxy specify the --config-path=/<path-to-config.yaml>
 # option.  Any other command-line options specified will override the values
 # from the config file.
+# https://avoidthehack.com/best-dns-privacy
 ---
 bootstrap:
   - "9.9.9.9:53"
@@ -22,6 +23,8 @@ upstream:
   - "tls://security-filter-dns.cleanbrowsing.org"
   - "tls://dns.adguard.com"
   - "tls://dns.mullvad.net"
+  - "tls://dns.decloudus.com"
+  - "tls://max.rethinkdns.com"
 timeout: '10s'
 cache: true
 cache-optimistic: true

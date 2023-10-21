@@ -278,9 +278,10 @@ func run(options *Options) {
 		log.Fatalf("cannot start the DNS proxy due to %s", err)
 	}
 
-	// TODO(rafalfr): nie działa sygnał
+	// TODO(rafalfr): nothing to do
 	signal.Notify(proxy.TerminationSignal, syscall.SIGINT, syscall.SIGTERM)
 	go proxy.UpdateBlockedDomains(proxy.Bdm, options.BlockedDomainsLists)
+	go proxy.MonitorLogFile(options.LogOutput)
 
 	//signalChannel := make(chan os.Signal, 1)
 	//signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)

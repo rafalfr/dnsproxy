@@ -220,3 +220,25 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 
 	log.Info("total number of blocked domains %d", r.getNumDomains())
 }
+
+func MonitorLogFile(logFilePath string) {
+	for {
+		select {
+		case <-TerminationSignal:
+			return
+		default:
+
+			ok, err := utils.FileExists(logFilePath)
+			if ok && err == nil {
+				fileSize, _, err := utils.GetFileInfo(logFilePath)
+				if fileSize > 128*1024*1024 && err == nil {
+					e := os.Remove(logFilePath)
+					if e != nil {
+						log.Fatal(e)
+					}
+				}
+			}
+			time.Sleep(time.Minute)
+		}
+	}
+}

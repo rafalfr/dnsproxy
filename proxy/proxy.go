@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/AdguardTeam/dnsproxy/utils"
+	"github.com/ameshkov/dnscrypt/v2"
+	"github.com/quic-go/quic-go"
 	"io"
 	"net"
 	"net/http"
@@ -21,10 +23,8 @@ import (
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
-	"github.com/ameshkov/dnscrypt/v2"
 	"github.com/miekg/dns"
 	gocache "github.com/patrickmn/go-cache"
-	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 )
 
