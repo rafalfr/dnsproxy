@@ -133,13 +133,13 @@ func UpdateBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string)
 				tokens := strings.Split(blockedDomainUrl, "/")
 				filePath := tokens[len(tokens)-1]
 
-				_, modificationTime, err := utils.GetFileInfo(filePath)
+				fileSize, modificationTime, err := utils.GetFileInfo(filePath)
 
 				if err != nil {
 					downloadDomains = true
 				} else {
 					// TODO (rafalfr): blocked domains update interval
-					if time.Now().Sub(modificationTime).Seconds() > 6*3600 {
+					if time.Now().Sub(modificationTime).Seconds() > 6*3600 || fileSize == 0 {
 						if utils.CheckRemoteFileExists(blockedDomainUrl) {
 							e := os.Remove(filePath)
 							if e != nil {
@@ -168,7 +168,15 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 		filePath := tokens[len(tokens)-1]
 
 		ok, _ := utils.FileExists(filePath)
-		if !ok {
+		if ok {
+			fileSize, _, _ := utils.GetFileInfo(filePath)
+			if fileSize == 0 {
+				err := utils.DownloadFromUrl(blockedDomainUrl)
+				if err != nil {
+					return
+				}
+			}
+		} else {
 			err := utils.DownloadFromUrl(blockedDomainUrl)
 			if err != nil {
 				return
