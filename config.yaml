@@ -16,16 +16,12 @@ ratelimit: 0
 udp-buf-size: 0
 upstream:
   - "quic://p0.freedns.controld.com"
-  - "quic://uncensored.dns.dnswarden.com"
   - "quic://dnsforge.de"
   - "tls://dns.quad9.net"
   - "tls://1dot1dot1dot1.cloudflare-dns.com"
   - "tls://security-filter-dns.cleanbrowsing.org"
   - "tls://dns.adguard.com"
   - "tls://dns.mullvad.net"
-  - "tls://dns.decloudus.com"
-  - "tls://max.rethinkdns.com"
-  - "https://blitz.ahadns.com/1:4.26.27"
 timeout: '10s'
 cache: true
 cache-optimistic: true
