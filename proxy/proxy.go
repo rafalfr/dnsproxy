@@ -559,7 +559,7 @@ func (p *Proxy) handleExchangeResult(d *DNSContext, req, resp *dns.Msg, u upstre
 	}
 
 	// TODO (rafalfr): print only if configured
-	log.Info("reply from %s for %s", u.Address(), resp.Question[0].Name)
+	//log.Info("reply from %s for %s", u.Address(), resp.Question[0].Name)
 	d.Upstream = u
 	d.Res = resp
 
@@ -599,6 +599,15 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 	}
 
 	dctx.calcFlagsAndSize()
+
+	//for _, rr := range dctx.Req.Extra {
+	//	if rr.Header().Rrtype == dns.TypeOPT {
+	//		opt := rr.(*dns.OPT)
+	//		for _, e := range opt.Option {
+	//			//log.Info(e.String())
+	//		}
+	//	}
+	//}
 
 	var ok bool
 	replyFromUpstream := true

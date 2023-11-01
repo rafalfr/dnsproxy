@@ -3,7 +3,9 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"github.com/AdguardTeam/dnsproxy/utils"
 	"net"
+	"net/url"
 	"time"
 
 	"github.com/AdguardTeam/golibs/log"
@@ -85,7 +87,7 @@ func (p *Proxy) startListeners(ctx context.Context) error {
 // handleDNSRequest processes the incoming packet bytes and returns with an optional response packet.
 func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 	d.StartTime = time.Now()
-	p.logDNSMessage(d.Req)
+	p.logDNSMessage(d, "req")
 
 	if d.Req.Response {
 		//log.Debug("Dropping incoming Reply packet from %s", d.Addr.String())
@@ -142,7 +144,7 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 		}
 	}
 
-	p.logDNSMessage(d.Res)
+	p.logDNSMessage(d, "res")
 	p.respond(d)
 
 	return err
@@ -213,7 +215,16 @@ func (p *Proxy) genWithRCode(req *dns.Msg, code int) (resp *dns.Msg) {
 	return resp
 }
 
-func (p *Proxy) logDNSMessage(m *dns.Msg) {
+func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
+
+	var m *dns.Msg
+	if messageType == "req" {
+		m = d.Req
+	}
+	if messageType == "res" {
+		m = d.Res
+	}
+
 	if m == nil {
 		return
 	}
@@ -222,7 +233,25 @@ func (p *Proxy) logDNSMessage(m *dns.Msg) {
 	if m.Response {
 		if len(m.Answer) > 0 {
 			numAnswers++
-			log.Printf("A#%-12d%s", numAnswers, m.Answer[0].String())
+			answerDomain := m.Answer[0].Header().Name
+			ipAddress := ""
+			if m.Answer[0].Header().Rrtype == dns.TypeA {
+				ipAddress = m.Answer[0].(*dns.A).A.String()
+			} else if m.Answer[0].Header().Rrtype == dns.TypeAAAA {
+				ipAddress = m.Answer[0].(*dns.AAAA).AAAA.String()
+			}
+			if d.Upstream != nil {
+				upstreamAddress := d.Upstream.Address()
+				u, err := url.Parse(upstreamAddress)
+				upstreamHost := ""
+				if err == nil {
+					upstreamHost = u.Host
+				}
+				log.Printf("A#%-12d%s from %s", numAnswers, answerDomain+"\t"+ipAddress, utils.ShortText(upstreamHost, 40))
+			} else {
+				log.Printf("A#%-12d%s from cache (#%d)", numAnswers, answerDomain+"\t"+ipAddress, NumCacheHits)
+			}
+
 		}
 	} else {
 		if len(m.Question) > 0 {
