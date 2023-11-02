@@ -252,6 +252,7 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 				upstreamHost = strings.Trim(upstreamHost, " \n\t")
 				log.Printf("A#%-12d%s from %s", numAnswers, answerDomain+"\t"+ipAddress, utils.ShortText(upstreamHost, 45))
 			} else {
+				NumCacheHits++
 				log.Printf("A#%-12d%s from cache (#%d)", numAnswers, answerDomain+"\t"+ipAddress, NumCacheHits)
 			}
 
@@ -259,7 +260,15 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 	} else {
 		if len(m.Question) > 0 {
 			numQueries++
-			log.Printf("Q#%-12d%s", numQueries, m.Question[0].Name)
+			sourceAddress := ""
+
+			if d.Conn.RemoteAddr() != nil {
+				sourceAddress = d.Conn.RemoteAddr().String()
+			} else if d.Conn.LocalAddr() != nil {
+				sourceAddress = d.Conn.LocalAddr().String()
+			}
+
+			log.Printf("Q#%-12d%s from %s", numQueries, m.Question[0].Name, sourceAddress)
 		}
 	}
 }

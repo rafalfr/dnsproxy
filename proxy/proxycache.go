@@ -36,7 +36,7 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 	d.CachedUpstreamAddr = ci.u
 
 	//log.Debug("dnsproxy: cache: %s", hitMsg)
-	NumCacheHits++
+	//NumCacheHits++
 	//log.Printf(hitMsg)
 
 	if p.cache.optimistic && expired {
