@@ -82,12 +82,12 @@ func exchangeWithUpstream(u upstream.Upstream, req *dns.Msg) (*dns.Msg, int, err
 			err,
 		)
 	} else {
-		log.Debug(
-			"dnsproxy: upstream %s successfully finished exchange of %s; elapsed %s",
-			addr,
-			req.Question[0].String(),
-			elapsed,
-		)
+		//log.Debug(
+		//	"dnsproxy: upstream %s successfully finished exchange of %s; elapsed %s",
+		//	addr,
+		//	req.Question[0].String(),
+		//	elapsed,
+		//)
 	}
 
 	return reply, int(elapsed.Milliseconds()), err
