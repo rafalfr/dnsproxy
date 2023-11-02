@@ -87,7 +87,7 @@ func (p *Proxy) startListeners(ctx context.Context) error {
 
 // handleDNSRequest processes the incoming packet bytes and returns with an optional response packet.
 func (p *Proxy) handleDNSRequest(d *DNSContext) error {
-	d.StartTime = time.Now()
+	//d.StartTime = time.Now()
 	p.logDNSMessage(d, "req")
 
 	if d.Req.Response {

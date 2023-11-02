@@ -5,6 +5,7 @@ import (
 
 	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/AdguardTeam/golibs/errors"
+	"github.com/AdguardTeam/golibs/log"
 	"github.com/miekg/dns"
 	"golang.org/x/exp/slices"
 )
@@ -70,20 +71,20 @@ func exchangeWithUpstream(u upstream.Upstream, req *dns.Msg) (*dns.Msg, int, err
 	reply, err := u.Exchange(req)
 	elapsed := time.Since(startTime)
 	if err != nil {
-		//log.Error(
-		//	"upstream %s failed to exchange %s in %s. Cause: %s",
-		//	u.Address(),
-		//	req.Question[0].String(),
-		//	elapsed,
-		//	err,
-		//)
+		log.Error(
+			"upstream %s failed to exchange %s in %s. Cause: %s",
+			u.Address(),
+			req.Question[0].String(),
+			elapsed,
+			err,
+		)
 	} else {
-		//log.Tracef(
-		//	"upstream %s successfully finished exchange of %s. Elapsed %s.",
-		//	u.Address(),
-		//	req.Question[0].String(),
-		//	elapsed,
-		//)
+		log.Tracef(
+			"upstream %s successfully finished exchange of %s. Elapsed %s.",
+			u.Address(),
+			req.Question[0].String(),
+			elapsed,
+		)
 	}
 
 	return reply, int(elapsed.Milliseconds()), err

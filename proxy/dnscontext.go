@@ -14,9 +14,6 @@ import (
 
 // DNSContext represents a DNS request message context
 type DNSContext struct {
-	// StartTime is the moment when request processing started.
-	StartTime time.Time
-
 	// Conn is the underlying client connection.  It is nil if Proto is
 	// ProtoDNSCrypt, ProtoHTTPS, or ProtoQUIC.
 	Conn net.Conn
@@ -30,6 +27,8 @@ type DNSContext struct {
 	QUICStream quic.Stream
 
 	// Addr is the address of the client.
+	//
+	// TODO(s.chzhen):  Use [netip.AddrPort].
 	Addr net.Addr
 
 	// Upstream is the upstream that resolved the request.  In case of cached
@@ -65,6 +64,10 @@ type DNSContext struct {
 
 	// localIP - local IP address (for UDP socket to call udpMakeOOBWithSrc)
 	localIP net.IP
+
+	// QueryDuration is the duration of a successful query to an upstream
+	// server or, if the upstream server is unavailable, to a fallback server.
+	QueryDuration time.Duration
 
 	// DoQVersion is the DoQ protocol version. It can (and should) be read from
 	// ALPN, but in the current version we also use the way DNS messages are

@@ -110,11 +110,11 @@ type Proxy struct {
 	// Upstream
 	// --
 
-	// upstreamRttStats is a map of upstream addresses and their rtt.  Used to
+	// upstreamRTTStats is a map of upstream addresses and their rtt.  Used to
 	// sort upstreams by their latency.
-	upstreamRttStats map[string]int
+	upstreamRTTStats map[string]int
 
-	// rttLock protects upstreamRttStats.
+	// rttLock protects upstreamRTTStats.
 	rttLock sync.Mutex
 
 	// DNS64 (in case dnsproxy works in a NAT64/DNS64 network)
@@ -176,11 +176,18 @@ type Proxy struct {
 	requestGoroutinesSema semaphore
 
 	// Config is the proxy configuration.
+	//
+	// TODO(a.garipov): Remove this embed and create a proper initializer.
 	Config
 }
 
 // Init populates fields of p but does not start listeners.
 func (p *Proxy) Init() (err error) {
+	err = p.validateBasicAuth()
+	if err != nil {
+		return fmt.Errorf("basic auth: %w", err)
+	}
+
 	p.initCache()
 
 	if p.MaxGoroutines > 0 {
@@ -224,6 +231,21 @@ func (p *Proxy) Init() (err error) {
 	err = p.setupDNS64()
 	if err != nil {
 		return fmt.Errorf("setting up DNS64: %w", err)
+	}
+
+	return nil
+}
+
+// validateBasicAuth validates the basic-auth mode settings if p.Config.Userinfo
+// is set.
+func (p *Proxy) validateBasicAuth() (err error) {
+	conf := p.Config
+	if conf.Userinfo == nil {
+		return nil
+	}
+
+	if len(conf.HTTPSListenAddr) == 0 {
+		return errors.Error("no https addrs")
 	}
 
 	return nil
@@ -519,6 +541,8 @@ func (p *Proxy) replyFromUpstream(d *DNSContext) (ok bool, err error) {
 	}
 
 	//start := time.Now()
+	//src := "upstream"
+	//start := time.Now()
 
 	// Perform the DNS request.
 	resp, u, err := p.exchange(req, upstreams)
@@ -534,12 +558,27 @@ func (p *Proxy) replyFromUpstream(d *DNSContext) (ok bool, err error) {
 	if err != nil && p.Fallbacks != nil {
 		//log.Debug("proxy: replying from upstream: using fallback due to %s", err)
 
+		// Reset the timer.
+		start = time.Now()
+		//src = "fallback"
+
 		upstreams = p.Fallbacks.getUpstreamsForDomain(req.Question[0].Name)
 		if len(upstreams) == 0 {
 			return false, fmt.Errorf("selecting fallback upstream: %w", upstream.ErrNoUpstreams)
 		}
 
 		resp, u, err = upstream.ExchangeParallel(upstreams, req)
+	}
+
+	if err != nil {
+		//log.Debug("proxy: replying from %s: %s", src, err)
+	}
+
+	if resp != nil {
+		rtt := time.Since(start)
+		//log.Debug("proxy: replying from %s: rtt is %s", src, rtt)
+
+		d.QueryDuration = rtt
 	}
 
 	p.handleExchangeResult(d, req, resp, u)
@@ -745,9 +784,8 @@ func (dctx *DNSContext) processECS(cliIP net.IP) {
 // newDNSContext returns a new properly initialized *DNSContext.
 func (p *Proxy) newDNSContext(proto Proto, req *dns.Msg) (d *DNSContext) {
 	return &DNSContext{
-		Proto:     proto,
-		Req:       req,
-		StartTime: time.Now(),
+		Proto: proto,
+		Req:   req,
 
 		RequestID: atomic.AddUint64(&p.counter, 1),
 	}
