@@ -540,7 +540,7 @@ func (p *Proxy) replyFromUpstream(d *DNSContext) (ok bool, err error) {
 		return false, fmt.Errorf("selecting general upstream: %w", upstream.ErrNoUpstreams)
 	}
 
-	//start := time.Now()
+	start := time.Now()
 	//src := "upstream"
 	//start := time.Now()
 
