@@ -6,6 +6,7 @@ import (
 	"github.com/AdguardTeam/dnsproxy/utils"
 	"net"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/AdguardTeam/golibs/log"
@@ -233,13 +234,14 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 	if m.Response {
 		if len(m.Answer) > 0 {
 			numAnswers++
-			answerDomain := m.Answer[0].Header().Name
+			answerDomain := strings.Trim(m.Answer[0].Header().Name, " \n\t")
 			ipAddress := ""
 			if m.Answer[0].Header().Rrtype == dns.TypeA {
 				ipAddress = m.Answer[0].(*dns.A).A.String()
 			} else if m.Answer[0].Header().Rrtype == dns.TypeAAAA {
 				ipAddress = m.Answer[0].(*dns.AAAA).AAAA.String()
 			}
+			ipAddress = strings.Trim(ipAddress, " \n\t")
 			if d.Upstream != nil {
 				upstreamAddress := d.Upstream.Address()
 				u, err := url.Parse(upstreamAddress)
@@ -247,7 +249,8 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 				if err == nil {
 					upstreamHost = u.Host
 				}
-				log.Printf("A#%-12d%s from %s", numAnswers, answerDomain+"\t"+ipAddress, utils.ShortText(upstreamHost, 40))
+				upstreamHost = strings.Trim(upstreamHost, " \n\t")
+				log.Printf("A#%-12d%s from %s", numAnswers, answerDomain+"\t"+ipAddress, utils.ShortText(upstreamHost, 45))
 			} else {
 				log.Printf("A#%-12d%s from cache (#%d)", numAnswers, answerDomain+"\t"+ipAddress, NumCacheHits)
 			}

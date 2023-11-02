@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"github.com/AdguardTeam/golibs/log"
 	"math/big"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -34,6 +35,5 @@ func ShortText(s string, maxLen int) string {
 	if utf8.ValidString(s[:maxLen]) {
 		return s[:maxLen]
 	}
-	return s[:maxLen+1]
-
+	return strings.ToValidUTF8(s[:maxLen+1], "")
 }
