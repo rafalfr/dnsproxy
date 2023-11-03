@@ -236,10 +236,14 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 			numAnswers++
 			answerDomain := strings.Trim(m.Answer[0].Header().Name, " \n\t")
 			ipAddress := ""
-			if m.Answer[0].Header().Rrtype == dns.TypeA {
-				ipAddress = m.Answer[0].(*dns.A).A.String()
-			} else if m.Answer[0].Header().Rrtype == dns.TypeAAAA {
-				ipAddress = m.Answer[0].(*dns.AAAA).AAAA.String()
+			for _, answer := range m.Answer {
+				if answer.Header().Rrtype == dns.TypeA {
+					ipAddress = answer.(*dns.A).A.String()
+					break
+				} else if answer.Header().Rrtype == dns.TypeAAAA {
+					ipAddress = answer.(*dns.AAAA).AAAA.String()
+					break
+				}
 			}
 			ipAddress = strings.Trim(ipAddress, " \n\t")
 			if d.Upstream != nil {
