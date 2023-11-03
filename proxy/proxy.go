@@ -677,6 +677,7 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 				}
 				r.Question = dctx.Req.Question
 				dctx.Res = r
+				dctx.Upstream = nil
 				replyFromUpstream = false
 				ok = true
 				err = nil

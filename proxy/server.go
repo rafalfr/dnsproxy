@@ -260,13 +260,7 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 	} else {
 		if len(m.Question) > 0 {
 			numQueries++
-			sourceAddress := ""
-
-			if d.Conn.RemoteAddr() != nil {
-				sourceAddress = d.Conn.RemoteAddr().String()
-			} else if d.Conn.LocalAddr() != nil {
-				sourceAddress = d.Conn.LocalAddr().String()
-			}
+			sourceAddress := d.Addr.String()
 
 			log.Printf("Q#%-12d%s from %s", numQueries, m.Question[0].Name, sourceAddress)
 		}
