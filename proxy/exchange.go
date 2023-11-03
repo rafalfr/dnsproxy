@@ -34,7 +34,7 @@ func (p *Proxy) exchange(req *dns.Msg, upstreams []upstream.Upstream) (reply *dn
 	// sort upstreams by rtt from fast to slow
 	sortedUpstreams := p.getSortedUpstreams(upstreams)
 
-	errs := []error{}
+	var errs []error
 	for _, dnsUpstream := range sortedUpstreams {
 		var elapsed int
 		reply, elapsed, err = exchangeWithUpstream(dnsUpstream, req)

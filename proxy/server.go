@@ -250,10 +250,14 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 					upstreamHost = u.Host
 				}
 				upstreamHost = strings.Trim(upstreamHost, " \n\t")
-				log.Printf("A#%-12d%s from %s", numAnswers, answerDomain+"\t"+ipAddress, utils.ShortText(upstreamHost, 45))
+				message := fmt.Sprintf("A#%-10d%-20.20s%-20.20s from %-15.15s", numAnswers, answerDomain, ipAddress, utils.ShortText(upstreamHost, 45))
+				//log.Printf("A#%-10d%s from %s", numAnswers, answerDomain+"\t"+ipAddress, utils.ShortText(upstreamHost, 45))
+				log.Info(message)
 			} else {
 				NumCacheHits++
-				log.Printf("A#%-12d%s from cache (#%d)", numAnswers, answerDomain+"\t"+ipAddress, NumCacheHits)
+				message := fmt.Sprintf("A#%-10d%-20.19s%-20.20s from cache (#%d)", numAnswers, answerDomain, ipAddress, NumCacheHits)
+				//log.Printf("A#%-10d%s from cache (#%d)", numAnswers, answerDomain+"\t"+ipAddress, NumCacheHits)
+				log.Info(message)
 			}
 
 		}
@@ -261,8 +265,9 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 		if len(m.Question) > 0 {
 			numQueries++
 			sourceAddress := d.Addr.String()
-
-			log.Printf("Q#%-12d%s from %s", numQueries, m.Question[0].Name, sourceAddress)
+			message := fmt.Sprintf("Q#%-10d%-40.40s from %-15.15s", numQueries, m.Question[0].Name, sourceAddress)
+			//log.Printf("Q#%-10d%s from %s", numQueries, m.Question[0].Name, sourceAddress)
+			log.Info(message)
 		}
 	}
 }

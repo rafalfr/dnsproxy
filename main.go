@@ -531,7 +531,7 @@ func initDNSCryptConfig(config *proxy.Config, options *Options) {
 
 // initListenAddrs inits listen addrs
 func initListenAddrs(config *proxy.Config, options *Options) {
-	listenIPs := []net.IP{}
+	var listenIPs []net.IP
 
 	if len(options.ListenAddrs) == 0 {
 		// If ListenAddrs has not been parsed through config file nor command
