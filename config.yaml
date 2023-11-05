@@ -17,11 +17,14 @@ udp-buf-size: 0
 upstream:
   - "quic://p0.freedns.controld.com"
   - "quic://dnsforge.de"
+  - "quic://unfiltered.adguard-dns.com"
   - "tls://dns.quad9.net"
-  - "tls://1dot1dot1dot1.cloudflare-dns.com"
+  - "tls://one.one.one.one"
   - "tls://security-filter-dns.cleanbrowsing.org"
-  - "tls://dns.adguard.com"
   - "tls://dns.mullvad.net"
+  - "tls://private.canadianshield.cira.ca"
+  - "tls://dns-dot-no-safe-search.dnsforfamily.com"
+  - "https://doh.opendns.com/dns-query"
 timeout: '10s'
 cache: true
 cache-optimistic: true
@@ -32,8 +35,6 @@ blocked_domains_lists:
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/dyndns.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/hoster.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/gambling.txt"
-  #- "https://big.oisd.nl/domainswild"
-  #- "https://o0.pages.dev/Pro/wildcards.txt"
 fallback:
     - "quic://x-hagezi-ultimate.freedns.controld.com"
 output: "/tmp/dnsproxy.log"
