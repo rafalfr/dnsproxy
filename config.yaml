@@ -23,7 +23,6 @@ upstream:
   - "tls://security-filter-dns.cleanbrowsing.org"
   - "tls://dns.mullvad.net"
   - "tls://private.canadianshield.cira.ca"
-  - "tls://dns-dot-no-safe-search.dnsforfamily.com"
   - "https://doh.opendns.com/dns-query"
 timeout: '10s'
 cache: true
