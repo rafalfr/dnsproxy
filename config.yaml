@@ -36,7 +36,6 @@ upstream:
   - "tls://dot.tiar.app"
   - "https://dns.artikel10.org/dns-query"
   - "https://doh.opendns.com/dns-query"
-  - "https://doh1.blahdns.com/uncensor"
 timeout: '10s'
 cache: true
 cache-optimistic: true
