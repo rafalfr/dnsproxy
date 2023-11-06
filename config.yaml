@@ -4,6 +4,10 @@
 # option.  Any other command-line options specified will override the values
 # from the config file.
 # https://avoidthehack.com/best-dns-privacy
+# https://european-alternatives.eu/category/public-dns
+# https://github.com/paulmillr/encrypted-dns
+# https://github.com/pengelana/blocklist
+# https://github.com/DNSCrypt/dnscrypt-resolvers/blob/master/v3/public-resolvers.md
 ---
 bootstrap:
   - "9.9.9.9:53"
@@ -18,12 +22,21 @@ upstream:
   - "quic://p0.freedns.controld.com"
   - "quic://dnsforge.de"
   - "quic://unfiltered.adguard-dns.com"
+  - "quic://zero.dns0.eu"
   - "tls://dns.quad9.net"
   - "tls://one.one.one.one"
   - "tls://security-filter-dns.cleanbrowsing.org"
   - "tls://dns.mullvad.net"
   - "tls://private.canadianshield.cira.ca"
+  - "tls://dot.sb"
+  - "tls://dot1.applied-privacy.net"
+  - "tls://kaitain.restena.lu"
+  - "tls://dns3.digitalcourage.de"
+  - "tls://dns.digitale-gesellschaft.ch"
+  - "tls://dns.artikel10.org"
+  - "tls://dot.tiar.app"
   - "https://doh.opendns.com/dns-query"
+  - "https://doh1.blahdns.com/uncensor"
 timeout: '10s'
 cache: true
 cache-optimistic: true
