@@ -15,8 +15,10 @@ listen-addrs:
   - "0.0.0.0"
 listen-ports:
   - 53
-max-go-routines: 10
+max-go-routines: 20
 ratelimit: 0
+http3: true
+all-servers: false
 udp-buf-size: 0
 upstream:
   - "quic://p0.freedns.controld.com"
@@ -33,9 +35,18 @@ upstream:
   - "tls://kaitain.restena.lu"
   - "tls://dns3.digitalcourage.de"
   - "tls://dns.digitale-gesellschaft.ch"
-  - "tls://dot.tiar.app"
+  - "https://doh.tiar.app/dns-query"
   - "https://dns.artikel10.org/dns-query"
   - "https://doh.opendns.com/dns-query"
+  - "[/google.pl/]tls://dns.google"
+  - "[/google.com/]tls://dns.google"
+  - "[/lh3.googleusercontent.com/]tls://dns.google"
+  - "[/gstatic.com/]tls://dns.google"
+  - "[/youtube.com/]tls://dns.google"
+  - "[/i.ytimg.com/]tls://dns.google"
+  - "[/yt3.ggpht.com/]tls://dns.google"
+  - "[/googleapis.com/]tls://dns.google"
+  - "[/googlevideo.com/]tls://dns.google"
 timeout: '10s'
 cache: true
 cache-optimistic: true

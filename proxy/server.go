@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/AdguardTeam/golibs/log"
@@ -15,8 +16,9 @@ import (
 )
 
 // TODO (rafalfr): nothing to do
-var numQueries uint64 = 0
-var numAnswers uint64 = 0
+var numQueries atomic.Uint64
+var numAnswers atomic.Uint64
+var numCacheHits atomic.Uint64
 
 // startListeners configures and starts listener loops
 func (p *Proxy) startListeners(ctx context.Context) error {
@@ -233,7 +235,7 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 	// TODO (rafalfr): nothing to do
 	if m.Response {
 		if len(m.Answer) > 0 {
-			numAnswers++
+			numAnswers.Add(1)
 			answerDomain := strings.Trim(m.Answer[0].Header().Name, " \n\t")
 			ipAddress := ""
 			for _, answer := range m.Answer {
@@ -254,14 +256,14 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 					upstreamHost = u.Host
 				}
 				upstreamHost = strings.Trim(upstreamHost, " \n\t")
-				message := fmt.Sprintf("A#%-10d%-50.49s%-25.25s from %-50.50s\n", numAnswers, answerDomain, ipAddress, utils.ShortText(upstreamHost, 50))
+				message := fmt.Sprintf("A#%-10d%-50.49s%-25.25s from %-50.50s\n", numAnswers.Load(), answerDomain, ipAddress, utils.ShortText(upstreamHost, 50))
 				_, err = log.Writer().Write([]byte(message))
 				if err != nil {
 					return
 				}
 			} else {
-				NumCacheHits++
-				message := fmt.Sprintf("A#%-10d%-50.49s%-25.25s from cache (#%d)\n", numAnswers, answerDomain, ipAddress, NumCacheHits)
+				numCacheHits.Add(1)
+				message := fmt.Sprintf("A#%-10d%-50.49s%-25.25s from cache (#%d)\n", numAnswers.Load(), answerDomain, ipAddress, numCacheHits.Load())
 				_, err := log.Writer().Write([]byte(message))
 				if err != nil {
 					return
@@ -270,9 +272,9 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 		}
 	} else {
 		if len(m.Question) > 0 {
-			numQueries++
+			numQueries.Add(1)
 			sourceAddress := d.Addr.String()
-			message := fmt.Sprintf("Q#%-10d%-75.75s from %-30.30s\n", numQueries, m.Question[0].Name, sourceAddress)
+			message := fmt.Sprintf("Q#%-10d%-75.75s from %-30.30s\n", numQueries.Load(), m.Question[0].Name, sourceAddress)
 			_, err := log.Writer().Write([]byte(message))
 			if err != nil {
 				return

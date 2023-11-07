@@ -7,8 +7,6 @@ import (
 	"github.com/AdguardTeam/golibs/netutil"
 )
 
-var NumCacheHits uint64 = 0
-
 // replyFromCache tries to get the response from general or subnet cache.
 // Returns true on success.
 func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
