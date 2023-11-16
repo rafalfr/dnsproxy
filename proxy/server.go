@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/AdguardTeam/dnsproxy/utils"
+	"github.com/quic-go/quic-go"
 	"net"
 	"net/url"
 	"strings"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/miekg/dns"
-	"github.com/quic-go/quic-go"
 )
 
 // TODO (rafalfr): nothing to do

@@ -57,6 +57,9 @@ blocked_domains_lists:
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/dyndns.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/hoster.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/gambling.txt"
+  - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/doh-vpn-proxy-bypass.txt"
 fallback:
     - "quic://x-hagezi-ultimate.freedns.controld.com"
+domains_excluded_from_blocking:
+    - "*.wordpress.com"
 output: "/tmp/dnsproxy.log"

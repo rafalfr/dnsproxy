@@ -7,6 +7,16 @@ import (
 	"time"
 )
 
+/**
+ * FileExists checks if a file with the given name exists.
+ *
+ * Parameters:
+ * - name (string): The name of the file to check.
+ *
+ * Returns:
+ * - bool: A boolean value indicating whether the file exists or not.
+ * - error: An error value, if any occurred during the file existence check.
+ */
 func FileExists(name string) (bool, error) {
 	_, err := os.Stat(name)
 	if os.IsNotExist(err) {
@@ -15,6 +25,8 @@ func FileExists(name string) (bool, error) {
 	return err == nil, err
 }
 
+// handle error
+// use fileSize and modificationTime
 func GetFileInfo(filePath string) (int64, time.Time, error) {
 
 	// Get the fileinfo

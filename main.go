@@ -10,9 +10,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/AdguardTeam/dnsproxy/internal/version"
@@ -23,6 +21,7 @@ import (
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/timeutil"
 	"github.com/ameshkov/dnscrypt/v2"
+	"github.com/go-co-op/gocron"
 	goFlags "github.com/jessevdk/go-flags"
 	"gopkg.in/yaml.v3"
 )
@@ -207,13 +206,34 @@ type Options struct {
 
 	// TODO (rafalfr): nothing to do
 	// blocked domains lists
-	BlockedDomainsLists []string `yaml:"blocked_domains_lists" long:"blocked_domains_lists" description:"An blokced domains list to be used (can be specified multiple times)."`
+	BlockedDomainsLists []string `yaml:"blocked_domains_lists" long:"blocked_domains_lists" description:"The blokced domains list to be used (can be specified multiple times)."`
+
+	DomainsExcludedFromBlockingLists []string `yaml:"domains_excluded_from_blocking" long:"domains_excluded_from_blocking" description:"A list of domains to be excluded from blocking lists (can be specified multiple times)."`
 }
 
 const (
 	defaultLocalTimeout = 1 * time.Second
 )
 
+/**
+ * The `main` function is the entry point of the program. It initializes an
+ * `Options` struct and parses command line arguments.
+ *
+ * The function iterates over the command line arguments and checks if the
+ * `--version` flag is present. If it is, the program prints the version
+ * information and exits.
+ *
+ * Next, the function manually parses the `--config-path` flag and reads the
+ * specified configuration file. The file contents are unmarshaled into the
+ * `options` struct.
+ *
+ * After that, the function creates a parser using the `goFlags` package and
+ * attempts to parse the remaining command line arguments. If parsing fails, the
+ * program exits with an error.
+ *
+ * Finally, the `run` function is called with the parsed options to start the
+ * program's execution.
+ */
 func main() {
 	options := &Options{}
 
@@ -256,6 +276,27 @@ func main() {
 	run(options)
 }
 
+// run starts and runs the DNS proxy server based on the provided options.
+// It sets the log level and log output file if specified in the options.
+// It also creates the proxy configuration, starts the proxy server,
+// and handles the termination signal to stop the proxy gracefully.
+//
+// Parameters:
+//
+//	options: A pointer to the Options struct containing the configuration options.
+//
+// Example:
+//
+//	options := &Options{
+//	  Verbose:    true,
+//	  LogOutput:  "/var/log/dnsproxy.log",
+//	  IPv6Disabled: false,
+//	  BlockedDomainsLists: []string{"blocked_domains.txt"},
+//	}
+//	run(options)
+//
+// Returns: None.
+// ...
 func run(options *Options) {
 	if options.Verbose {
 		log.SetLevel(log.DEBUG)
@@ -293,15 +334,34 @@ func run(options *Options) {
 	}
 
 	// TODO(rafalfr): nothing to do
-	signal.Notify(proxy.TerminationSignal, syscall.SIGINT, syscall.SIGTERM)
-	go proxy.UpdateBlockedDomains(proxy.Bdm, options.BlockedDomainsLists)
-	go proxy.MonitorLogFile(options.LogOutput)
+	for _, domain := range options.DomainsExcludedFromBlockingLists {
+		proxy.Edm.AddDomain(domain)
+	}
+
+	s := gocron.NewScheduler(time.UTC)
+	_, err = s.Every(1).Day().At("05:00").Do(func() { proxy.UpdateBlockedDomains(proxy.Bdm, options.BlockedDomainsLists) })
+	if err != nil {
+		log.Error("Can't start blocked domains updater")
+	}
+	_, err = s.Every(1).Minute().Do(func() { proxy.MonitorLogFile(options.LogOutput) })
+	if err != nil {
+		log.Error("Can't start blocked domains updater")
+	}
+
+	s.StartAsync()
+	s.RunAll()
+
+	//signal.Notify(proxy.TerminationSignal, syscall.SIGINT, syscall.SIGTERM)
+	//go proxy.UpdateBlockedDomains(proxy.Bdm, options.BlockedDomainsLists)
+
+	//go proxy.MonitorLogFile(options.LogOutput)
 
 	//signalChannel := make(chan os.Signal, 1)
 	//signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
 	//<-signalChannel
 	<-proxy.FinishSignal
 
+	s.Stop()
 	// Stopping the proxy.
 	err = dnsProxy.Stop()
 	if err != nil {
