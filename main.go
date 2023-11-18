@@ -338,17 +338,6 @@ func run(options *Options) {
 	}
 
 	// TODO(rafalfr): nothing to do
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.New()
-	r.GET("/stats", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"stats": proxy.SM.GetStats()})
-	})
-	err = r.Run("0.0.0.0:" + strconv.Itoa(options.StatsPort))
-	if err != nil {
-		log.Fatalf("cannot start the stats server due to %s", err)
-		return
-	}
-
 	for _, domain := range options.DomainsExcludedFromBlockingLists {
 		proxy.Edm.AddDomain(domain)
 	}
@@ -366,14 +355,17 @@ func run(options *Options) {
 	s.StartAsync()
 	s.RunAll()
 
-	//signal.Notify(proxy.TerminationSignal, syscall.SIGINT, syscall.SIGTERM)
-	//go proxy.UpdateBlockedDomains(proxy.Bdm, options.BlockedDomainsLists)
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.GET("/stats", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"stats": proxy.SM.GetStats()})
+	})
+	err = r.Run("0.0.0.0:" + strconv.Itoa(options.StatsPort))
+	if err != nil {
+		log.Fatalf("cannot start the stats server due to %s", err)
+		return
+	}
 
-	//go proxy.MonitorLogFile(options.LogOutput)
-
-	//signalChannel := make(chan os.Signal, 1)
-	//signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
-	//<-signalChannel
 	<-proxy.FinishSignal
 
 	s.Stop()
