@@ -290,12 +290,14 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 			if fileSize == 0 {
 				err := utils.DownloadFromUrl(blockedDomainUrl)
 				if err != nil {
+					log.Fatal(err)
 					return
 				}
 			}
 		} else {
 			err := utils.DownloadFromUrl(blockedDomainUrl)
 			if err != nil {
+				log.Fatal(err)
 				return
 			}
 		}
@@ -336,6 +338,7 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 
 		err = f.Close()
 		if err != nil {
+			log.Fatalf("close file error: %v", err)
 			return
 		}
 	}
