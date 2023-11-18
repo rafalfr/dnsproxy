@@ -62,5 +62,6 @@ fallback:
 domains_excluded_from_blocking:
     - "*.wordpress.com"
     - "*.blogspot.com"
+    - "*.blogger.com"
 stats_port: 9999
 output: "/tmp/dnsproxy.log"
