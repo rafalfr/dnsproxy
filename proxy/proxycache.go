@@ -15,6 +15,12 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 	var expired bool
 	var key []byte
 
+	// TODO (rafalfr): nothing to do
+	SM.Set("cache size", p.cache.items.Stats().Size)
+	SM.Set("cache count", p.cache.items.Stats().Count)
+	SM.Set("cache hits", p.cache.items.Stats().Hit)
+	SM.Set("cache misses", p.cache.items.Stats().Miss)
+
 	if !p.Config.EnableEDNSClientSubnet {
 		ci, expired, key = p.cache.get(d.Req)
 		//hitMsg = fmt.Sprintf("C#%-12dserving cached response", numCacheHits)
@@ -32,10 +38,6 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 
 	d.Res = ci.m
 	d.CachedUpstreamAddr = ci.u
-
-	//log.Debug("dnsproxy: cache: %s", hitMsg)
-	//NumCacheHits++
-	//log.Printf(hitMsg)
 
 	if p.cache.optimistic && expired {
 		// Build a reduced clone of the current context to avoid data race.

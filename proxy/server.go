@@ -257,12 +257,22 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 				}
 				upstreamHost = strings.Trim(upstreamHost, " \n\t")
 				message := fmt.Sprintf("A#%-10d%-50.49s%-25.25s from %-50.50s\n", numAnswers.Load(), answerDomain, ipAddress, utils.ShortText(upstreamHost, 50))
+				if SM.Exists(upstreamHost) {
+					SM.Set(upstreamHost, SM.Get(upstreamHost).(uint64)+1)
+				} else {
+					SM.Set(upstreamHost, uint64(1))
+				}
 				_, err = log.Writer().Write([]byte(message))
 				if err != nil {
 					return
 				}
 			} else {
 				numCacheHits.Add(1)
+				if SM.Exists("cache responses") {
+					SM.Set("cache responses", SM.Get("cache responses").(uint64)+1)
+				} else {
+					SM.Set("cache responses", uint64(1))
+				}
 				message := fmt.Sprintf("A#%-10d%-50.49s%-25.25s from cache (#%d)\n", numAnswers.Load(), answerDomain, ipAddress, numCacheHits.Load())
 				_, err := log.Writer().Write([]byte(message))
 				if err != nil {

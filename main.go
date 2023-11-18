@@ -4,12 +4,14 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/netip"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -205,8 +207,10 @@ type Options struct {
 	Version bool `yaml:"version" long:"version" description:"Prints the program version"`
 
 	// TODO (rafalfr): nothing to do
-	// blocked domains lists
-	BlockedDomainsLists []string `yaml:"blocked_domains_lists" long:"blocked_domains_lists" description:"The blokced domains list to be used (can be specified multiple times)."`
+
+	StatsPort int `yaml:"stats_port" long:"stats_port" description:"Port on which to expose statistics." default:"9999"`
+
+	BlockedDomainsLists []string `yaml:"blocked_domains_lists" long:"blocked_domains_lists" description:"The blocked domains list to be used (can be specified multiple times)."`
 
 	DomainsExcludedFromBlockingLists []string `yaml:"domains_excluded_from_blocking" long:"domains_excluded_from_blocking" description:"A list of domains to be excluded from blocking lists (can be specified multiple times)."`
 }
@@ -334,6 +338,16 @@ func run(options *Options) {
 	}
 
 	// TODO(rafalfr): nothing to do
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.GET("/stats", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"stats": proxy.SM.GetStats()})
+	})
+	err = r.Run("0.0.0.0:" + strconv.Itoa(options.StatsPort))
+	if err != nil {
+		return
+	}
+
 	for _, domain := range options.DomainsExcludedFromBlockingLists {
 		proxy.Edm.AddDomain(domain)
 	}
