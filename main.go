@@ -345,6 +345,7 @@ func run(options *Options) {
 	})
 	err = r.Run("0.0.0.0:" + strconv.Itoa(options.StatsPort))
 	if err != nil {
+		log.Fatalf("cannot start the stats server due to %s", err)
 		return
 	}
 
