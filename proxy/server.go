@@ -16,8 +16,13 @@ import (
 )
 
 // TODO (rafalfr): nothing to do
+// numQueries is used to count the number of queries
 var numQueries atomic.Uint64
+
+// numAnswers is used to count the number of answers
 var numAnswers atomic.Uint64
+
+// numCacheHits is used to count the number of cache hits
 var numCacheHits atomic.Uint64
 
 // startListeners configures and starts listener loops
@@ -218,6 +223,7 @@ func (p *Proxy) genWithRCode(req *dns.Msg, code int) (resp *dns.Msg) {
 	return resp
 }
 
+// logDNSMessage logs the DNS message type (Req or Res) to the logger and increments the appropriate counter based on the message type
 func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 
 	var m *dns.Msg
@@ -257,10 +263,10 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 				}
 				upstreamHost = strings.Trim(upstreamHost, " \n\t")
 				message := fmt.Sprintf("A#%-10d%-50.49s%-25.25s from %-50.50s\n", numAnswers.Load(), answerDomain, ipAddress, utils.ShortText(upstreamHost, 50))
-				if SM.Exists(upstreamHost) {
-					SM.Set(upstreamHost, SM.Get(upstreamHost).(uint64)+1)
+				if SM.Exists("resolvers::" + upstreamHost) {
+					SM.Set("resolvers::"+upstreamHost, SM.Get("resolvers::"+upstreamHost).(uint64)+1)
 				} else {
-					SM.Set(upstreamHost, uint64(1))
+					SM.Set("resolvers::"+upstreamHost, uint64(1))
 				}
 				_, err = log.Writer().Write([]byte(message))
 				if err != nil {
@@ -268,10 +274,10 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 				}
 			} else {
 				numCacheHits.Add(1)
-				if SM.Exists("cache responses") {
-					SM.Set("cache responses", SM.Get("cache responses").(uint64)+1)
+				if SM.Exists("cache::cache_responses") {
+					SM.Set("cache::cache_responses", SM.Get("cache::cache_responses").(uint64)+1)
 				} else {
-					SM.Set("cache responses", uint64(1))
+					SM.Set("cache::cache_responses", uint64(1))
 				}
 				message := fmt.Sprintf("A#%-10d%-50.49s%-25.25s from cache (#%d)\n", numAnswers.Load(), answerDomain, ipAddress, numCacheHits.Load())
 				_, err := log.Writer().Write([]byte(message))

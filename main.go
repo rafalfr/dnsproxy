@@ -4,7 +4,9 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/ameshkov/dnscrypt/v2"
 	"github.com/gin-gonic/gin"
+	"gopkg.in/yaml.v3"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -22,10 +24,8 @@ import (
 	"github.com/AdguardTeam/golibs/mathutil"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/timeutil"
-	"github.com/ameshkov/dnscrypt/v2"
 	"github.com/go-co-op/gocron"
 	goFlags "github.com/jessevdk/go-flags"
-	"gopkg.in/yaml.v3"
 )
 
 // Options represents console arguments.  For further additions, please do not

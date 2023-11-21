@@ -16,14 +16,17 @@ import (
 
 var FinishSignal = make(chan bool, 1)
 
+// reverse reverses the given slice of strings.
 func reverse(s []string) {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
 		s[i], s[j] = s[j], s[i]
 	}
 }
 
+// Bdm is a global instance of the BlockedDomainsManager struct.
 var Bdm = newBlockedDomainsManger()
 
+// BlockedDomainsManager is a class that manages blocked domains.
 type BlockedDomainsManager struct {
 	hosts      map[string]*Set
 	numDomains int
@@ -343,6 +346,7 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 		}
 	}
 
+	SM.Set("blocked_domains::num_domains", r.getNumDomains())
 	log.Info("total number of blocked domains %d", r.getNumDomains())
 }
 

@@ -13,6 +13,7 @@ import (
 
 // DownloadFromUrl example.com/file.txt", "/path/to/save/file.txt")
 // handle error
+
 func DownloadFromUrl(url string, opFilePath ...string) error {
 
 	filePath := ""

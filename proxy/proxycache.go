@@ -16,10 +16,10 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 	var key []byte
 
 	// TODO (rafalfr): nothing to do
-	SM.Set("cache size", p.cache.items.Stats().Size)
-	SM.Set("cache count", p.cache.items.Stats().Count)
-	SM.Set("cache hits", p.cache.items.Stats().Hit)
-	SM.Set("cache misses", p.cache.items.Stats().Miss)
+	SM.Set("cache::cache_size", p.cache.items.Stats().Size)
+	SM.Set("cache::cache_count", p.cache.items.Stats().Count)
+	SM.Set("cache::cache_hits", p.cache.items.Stats().Hit)
+	SM.Set("cache::cache_misses", p.cache.items.Stats().Miss)
 
 	if !p.Config.EnableEDNSClientSubnet {
 		ci, expired, key = p.cache.get(d.Req)
