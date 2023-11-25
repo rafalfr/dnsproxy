@@ -16,4 +16,5 @@ dnsproxy.exe
 example.crt
 example.key
 coverage.txt
+stats.json
 *.txt

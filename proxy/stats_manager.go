@@ -4,6 +4,8 @@ package proxy
 
 import (
 	"encoding/json"
+	"github.com/AdguardTeam/golibs/log"
+	"os"
 	"strings"
 	"sync"
 )
@@ -101,4 +103,86 @@ func (r *StatsManager) GetStats() map[string]any {
 	defer r.mux.Unlock()
 
 	return r.stats
+}
+
+func (r *StatsManager) GetStatsPtr() *map[string]any {
+	r.mux.Lock()
+	defer r.mux.Unlock()
+
+	return &r.stats
+}
+
+// SetStats sets the stats map of the StatsManager to the given map[string]any instance and returns it
+func (r *StatsManager) SetStats(stats *map[string]any) {
+	r.mux.Lock()
+	defer r.mux.Unlock()
+
+	r.stats = *stats
+}
+
+// LoadStats loads the stats map of the StatsManager from the given file path
+func (r *StatsManager) LoadStats(filePath string) {
+	r.mux.Lock()
+	defer r.mux.Unlock()
+
+	// write the code to check if the file exists
+	if _, err := os.Stat(filePath); err == nil {
+		// File exists
+		// write the code to read the file contents into bytes slice
+		bytes, err := os.ReadFile(filePath)
+		if err != nil {
+			log.Error("Error reading file: %s", filePath)
+			return
+		}
+
+		var stats map[string]any
+		err = json.Unmarshal(bytes, &stats)
+
+		if err != nil {
+			return
+		}
+		r.CopyStats(&stats, &r.stats)
+
+	} else if os.IsNotExist(err) {
+		// File does not exist
+		log.Error("File %s does not exist", filePath)
+	} else {
+		// Error occurred while checking file existence
+		log.Error("Error occurred while checking file existence: %s", filePath)
+	}
+}
+
+// SaveStats saves the stats map of the StatsManager to the given file path
+func (r *StatsManager) SaveStats(filePath string) {
+	r.mux.Lock()
+	defer r.mux.Unlock()
+
+	bytes, err := json.Marshal(&r.stats)
+	if err != nil {
+		log.Error("Error converting stats to JSON: %s", filePath)
+		return
+	}
+	err = os.WriteFile(filePath, bytes, 0644)
+	if err != nil {
+		log.Error("Error writing JSON to file: %s", filePath)
+		return
+	}
+}
+
+// CopyStats copies the stats map of the srcStats map to the dstStats map
+func (r *StatsManager) CopyStats(srcStats *map[string]interface{}, dstStats *map[string]interface{}) {
+	for key, value := range *srcStats {
+		if m, ok := value.(map[string]interface{}); ok {
+			var stats map[string]interface{}
+			stats = make(map[string]interface{})
+			(*dstStats)[key] = stats
+			r.CopyStats(&m, &stats)
+		} else {
+			if f, ok := value.(float64); ok {
+				(*dstStats)[key] = uint64(f)
+			} else {
+				(*dstStats)[key] = value
+			}
+		}
+	}
 }

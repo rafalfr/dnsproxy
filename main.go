@@ -13,8 +13,10 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/AdguardTeam/dnsproxy/internal/version"
@@ -332,6 +334,9 @@ func run(options *Options) {
 	}
 
 	// Start the proxy server.
+
+	proxy.SM.LoadStats("stats.json")
+
 	err := dnsProxy.Start()
 	if err != nil {
 		log.Fatalf("cannot start the DNS proxy due to %s", err)
@@ -345,11 +350,15 @@ func run(options *Options) {
 	s := gocron.NewScheduler(time.UTC)
 	_, err = s.Every(1).Day().At("05:00").Do(func() { proxy.UpdateBlockedDomains(proxy.Bdm, options.BlockedDomainsLists) })
 	if err != nil {
-		log.Error("Can't start blocked domains updater")
+		log.Error("Can't start blocked domains updater.")
 	}
 	_, err = s.Every(1).Minute().Do(func() { proxy.MonitorLogFile(options.LogOutput) })
 	if err != nil {
-		log.Error("Can't start blocked domains updater")
+		log.Error("Can't start blocked domains updater.")
+	}
+	_, err = s.Every(1).Hour().Do(func() { proxy.SM.SaveStats("stats.json") })
+	if err != nil {
+		log.Error("Can't start stats periodic save.")
 	}
 
 	s.StartAsync()
@@ -365,6 +374,14 @@ func run(options *Options) {
 		log.Fatalf("cannot start the stats server due to %s", err)
 		return
 	}
+
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGSTOP, syscall.SIGSEGV)
+	go func() {
+		<-c
+		log.Info("Shutting down...")
+		proxy.SM.SaveStats("stats.json")
+	}()
 
 	<-proxy.FinishSignal
 
