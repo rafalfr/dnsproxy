@@ -286,14 +286,14 @@ func (p *Proxy) Start() (err error) {
 
 // closeAll closes all closers and appends the occurred errors to errs.
 func closeAll[C io.Closer](errs []error, closers ...C) (appended []error) {
-    for _, c := range closers {
-        err := c.Close()
-        if err != nil {
-            errs = append(errs, err)
-        }
-    }
-    
-    return errs
+	for _, c := range closers {
+		err := c.Close()
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errs
 }
 
 // Stop stops the proxy server including all its listeners
@@ -659,10 +659,10 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 			queryDomain := strings.Trim(rr.Name, "\n ")
 			queryDomain = strings.TrimSuffix(rr.Name, ".")
 			if Bdm.checkDomain(queryDomain) == true {
-				if SM.Exists("blocked_domains::blocked_hits") {
-					SM.Set("blocked_domains::blocked_hits", SM.Get("blocked_domains::blocked_hits").(uint64)+1)
+				if SM.Exists("blocked_domains::blocked_responses") {
+					SM.Set("blocked_domains::blocked_responses", SM.Get("blocked_domains::blocked_responses").(uint64)+1)
 				} else {
-					SM.Set("blocked_domains::blocked_hits", uint64(1))
+					SM.Set("blocked_domains::blocked_responses", uint64(1))
 				}
 
 				if SM.Exists("blocked_domains::domains::" + queryDomain) {

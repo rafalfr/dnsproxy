@@ -18,8 +18,8 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 	// TODO (rafalfr): nothing to do
 	SM.Set("cache::cache_size", p.cache.items.Stats().Size)
 	SM.Set("cache::cache_count", p.cache.items.Stats().Count)
-	SM.Set("cache::cache_hits", p.cache.items.Stats().Hit)
-	SM.Set("cache::cache_misses", p.cache.items.Stats().Miss)
+	//SM.Set("cache::cache_hits", p.cache.items.Stats().Hit)
+	//SM.Set("cache::cache_misses", p.cache.items.Stats().Miss)
 
 	if !p.Config.EnableEDNSClientSubnet {
 		ci, expired, key = p.cache.get(d.Req)

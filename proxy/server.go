@@ -274,10 +274,10 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 				}
 			} else {
 				numCacheHits.Add(1)
-				if SM.Exists("cache::cache_responses") {
-					SM.Set("cache::cache_responses", SM.Get("cache::cache_responses").(uint64)+1)
+				if SM.Exists("local::num_cache_and_blocked_responses") {
+					SM.Set("local::num_cache_and_blocked_responses", SM.Get("local::num_cache_and_blocked_responses").(uint64)+1)
 				} else {
-					SM.Set("cache::cache_responses", uint64(1))
+					SM.Set("local::num_cache_and_blocked_responses", uint64(1))
 				}
 				message := fmt.Sprintf("A#%-10d%-50.49s%-25.25s from cache (#%d)\n", numAnswers.Load(), answerDomain, ipAddress, numCacheHits.Load())
 				_, err := log.Writer().Write([]byte(message))
