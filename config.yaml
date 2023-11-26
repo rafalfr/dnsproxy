@@ -8,6 +8,7 @@
 # https://github.com/paulmillr/encrypted-dns
 # https://github.com/pengelana/blocklist
 # https://github.com/DNSCrypt/dnscrypt-resolvers/blob/master/v3/public-resolvers.md
+# https://github.com/nickspaargaren/no-google/blob/master/google-domains
 ---
 bootstrap:
   - "9.9.9.9:53"
@@ -66,5 +67,6 @@ domains_excluded_from_blocking:
     - "*.wordpress.com"
     - "*.blogspot.com"
     - "*.blogger.com"
+    - "*.freedns.controld.com"
 stats_port: 9999
 output: "/tmp/dnsproxy.log"
