@@ -286,14 +286,14 @@ func (p *Proxy) Start() (err error) {
 
 // closeAll closes all closers and appends the occurred errors to errs.
 func closeAll[C io.Closer](errs []error, closers ...C) (appended []error) {
-	for _, c := range closers {
-		err := c.Close()
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	return errs
+    for _, c := range closers {
+        err := c.Close()
+        if err != nil {
+            errs = append(errs, err)
+        }
+    }
+    
+    return errs
 }
 
 // Stop stops the proxy server including all its listeners

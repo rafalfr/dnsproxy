@@ -9,6 +9,7 @@ import (
 	. "github.com/golang-collections/collections/set"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -308,6 +309,8 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 
 	r.clear()
 
+	allDomains := make([]string, 0)
+
 	for _, blockedDomainUrl := range blockedDomainsUrls {
 		tokens := strings.Split(blockedDomainUrl, "/")
 		filePath := tokens[len(tokens)-1]
@@ -333,9 +336,7 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 			}
 			if !strings.HasPrefix(line, "#") {
 				line = strings.Trim(line, "\n ")
-				if Edm.checkDomain(line) == false {
-					r.addDomain(line)
-				}
+				allDomains = append(allDomains, line)
 			}
 		}
 
@@ -346,8 +347,24 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 		}
 	}
 
+	sort.Slice(allDomains, func(i, j int) bool {
+		return len(allDomains[i]) < len(allDomains[j])
+	})
+
+	numDuplicatedDomains := 0
+	for _, domain := range allDomains {
+		if Edm.checkDomain(domain) == false {
+			if r.checkDomain(domain) == false {
+				r.addDomain(domain)
+			} else {
+				numDuplicatedDomains++
+			}
+		}
+	}
+
 	SM.Set("blocked_domains::num_domains", r.getNumDomains())
 	log.Info("total number of blocked domains %d", r.getNumDomains())
+	log.Info("number of duplicated domains %d", numDuplicatedDomains)
 }
 
 /**
