@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 var SM = NewStatsManager()
@@ -52,7 +53,11 @@ func (r *StatsManager) Get(key string) any {
 
 	keyParts := strings.Split(key, "::")
 	if len(keyParts) == 1 {
-		return r.stats[keyParts[0]]
+		if _, ok := r.stats[keyParts[0]]; ok {
+			return r.stats[keyParts[0]]
+		} else {
+			return nil
+		}
 	} else {
 		stats := r.stats
 		for i := 0; i < len(keyParts)-1; i++ {
@@ -149,6 +154,12 @@ func (r *StatsManager) LoadStats(filePath string) {
 	} else {
 		// Error occurred while checking file existence
 		log.Error("Error occurred while checking file existence: %s", filePath)
+	}
+
+	// get current date and time as string
+	currentTime := time.Now().Format("2006-01-02 15:04:05")
+	if r.Get("time::since") == nil {
+		r.Set("time::since", currentTime)
 	}
 }
 
