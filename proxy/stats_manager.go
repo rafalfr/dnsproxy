@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 var SM = NewStatsManager()
@@ -127,12 +128,9 @@ func (r *StatsManager) SetStats(stats *map[string]any) {
 // LoadStats loads the stats map of the StatsManager from the given file path
 func (r *StatsManager) LoadStats(filePath string) {
 	r.mux.Lock()
-	defer r.mux.Unlock()
 
-	// write the code to check if the file exists
 	if _, err := os.Stat(filePath); err == nil {
-		// File exists
-		// write the code to read the file contents into bytes slice
+
 		bytes, err := os.ReadFile(filePath)
 		if err != nil {
 			log.Error("Error reading file: %s", filePath)
@@ -154,11 +152,12 @@ func (r *StatsManager) LoadStats(filePath string) {
 		// Error occurred while checking file existence
 		log.Error("Error occurred while checking file existence: %s", filePath)
 	}
-		
-	//if r.Get("time::since") == nil {
-	//	currentTime := time.Now().Format("2006-01-02 15:04:05")
-	//	r.Set("time::since", currentTime)
-	//}
+
+	r.mux.Unlock()
+	if r.Get("time::since") == nil {
+		currentTime := time.Now().Format("2006-01-02 15:04:05")
+		r.Set("time::since", currentTime)
+	}
 }
 
 // SaveStats saves the stats map of the StatsManager to the given file path
