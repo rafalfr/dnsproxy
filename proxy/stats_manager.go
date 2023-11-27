@@ -155,10 +155,9 @@ func (r *StatsManager) LoadStats(filePath string) {
 		// Error occurred while checking file existence
 		log.Error("Error occurred while checking file existence: %s", filePath)
 	}
-
-	// get current date and time as string
-	currentTime := time.Now().Format("2006-01-02 15:04:05")
+		
 	if r.Get("time::since") == nil {
+		currentTime := time.Now().Format("2006-01-02 15:04:05")
 		r.Set("time::since", currentTime)
 	}
 }
