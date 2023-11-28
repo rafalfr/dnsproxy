@@ -334,7 +334,7 @@ func run(options *Options) {
 	}
 
 	// Start the proxy server.
-
+	// rafalfr code
 	proxy.SM.LoadStats("stats.json")
 
 	err := dnsProxy.Start()
@@ -342,7 +342,6 @@ func run(options *Options) {
 		log.Fatalf("cannot start the DNS proxy due to %s", err)
 	}
 
-	// TODO(rafalfr): nothing to do
 	for _, domain := range options.DomainsExcludedFromBlockingLists {
 		proxy.Edm.AddDomain(domain)
 	}
@@ -383,6 +382,7 @@ func run(options *Options) {
 		proxy.SM.SaveStats("stats.json")
 	}()
 
+	// end of rafalfr code
 	<-proxy.FinishSignal
 
 	s.Stop()

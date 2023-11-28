@@ -286,14 +286,14 @@ func (p *Proxy) Start() (err error) {
 
 // closeAll closes all closers and appends the occurred errors to errs.
 func closeAll[C io.Closer](errs []error, closers ...C) (appended []error) {
-    for _, c := range closers {
-        err := c.Close()
-        if err != nil {
-            errs = append(errs, err)
-        }
-    }
-    
-    return errs
+	for _, c := range closers {
+		err := c.Close()
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errs
 }
 
 // Stop stops the proxy server including all its listeners
@@ -651,7 +651,7 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 	var ok bool
 	replyFromUpstream := true
 
-	// TODO (rafalfr): nothing
+	// rafalfr code
 	for _, rr := range dctx.Req.Question {
 
 		if t := rr.Qtype; t == dns.TypeA || t == dns.TypeAAAA {
@@ -695,6 +695,8 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 			}
 		}
 	}
+	// end rafalfr code
+
 	if replyFromUpstream {
 		// Use cache only if it's enabled and the query doesn't use custom upstream.
 		// Also don't lookup the cache for responses with DNSSEC checking disabled

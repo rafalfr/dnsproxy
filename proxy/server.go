@@ -238,7 +238,7 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 		return
 	}
 
-	// TODO (rafalfr): nothing to do
+	// rafalfr code
 	if m.Response {
 		if len(m.Answer) > 0 {
 			numAnswers.Add(1)
@@ -297,4 +297,5 @@ func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
 			}
 		}
 	}
+	// end rafalfr code
 }
