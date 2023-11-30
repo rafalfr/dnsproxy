@@ -31,9 +31,9 @@ var Bdm = newBlockedDomainsManger()
 
 // BlockedDomainsManager is a class that manages blocked domains.
 type BlockedDomainsManager struct {
-	hosts      map[string]*Set
-	numDomains       int
+	hosts            map[string]*Set
 	domainToListName map[string]string
+	numDomains       int
 	mux              sync.Mutex
 }
 
@@ -49,8 +49,8 @@ func newBlockedDomainsManger() *BlockedDomainsManager {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	p.hosts = make(map[string]*Set)
-	p.numDomains = 0
 	p.domainToListName = make(map[string]string)
+	p.numDomains = 0
 	return &p
 }
 
@@ -104,8 +104,7 @@ func (r *BlockedDomainsManager) addDomain(domain tuple.T2[string, string]) {
 	r.domainToListName[domain.V1] = domain.V2
 }
 
-
-func (r *BlockedDomainsManager) checkDomain(domain string) (bool,string) {
+func (r *BlockedDomainsManager) checkDomain(domain string) (bool, string) {
 
 	r.mux.Lock()
 	defer r.mux.Unlock()
@@ -150,8 +149,6 @@ func (r *BlockedDomainsManager) getDomainListName(domain string) string {
 	return "unknown"
 }
 
-
-
 /**
  * getNumDomains returns the number of domains currently stored in the
  * BlockedDomainsManager.
@@ -187,6 +184,8 @@ func (r *BlockedDomainsManager) clear() {
 
 	clear(r.hosts)
 	r.numDomains = 0
+
+	clear(r.domainToListName)
 }
 
 /**
@@ -254,7 +253,6 @@ func UpdateBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string)
 	}
 }
 
-
 func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 
 	// https://github.com/xpzouying/go-practice/blob/master/read_file_line_by_line/main.go
@@ -287,7 +285,7 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 
 	r.clear()
 
-	allDomains :=make([]tuple.T2[string, string], 0)
+	allDomains := make([]tuple.T2[string, string], 0)
 
 	for _, blockedDomainUrl := range blockedDomainsUrls {
 		tokens := strings.Split(blockedDomainUrl, "/")
@@ -316,7 +314,7 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 			}
 			if !strings.HasPrefix(line, "#") {
 				line = strings.Trim(line, "\n ")
-				allDomains = append(allDomains, tuple.New2(line,fileName))
+				allDomains = append(allDomains, tuple.New2(line, fileName))
 			}
 		}
 
@@ -334,7 +332,7 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 	numDuplicatedDomains := 0
 	for _, domain := range allDomains {
 		if Edm.checkDomain(domain.V1) == false {
-			ok, _ :=r.checkDomain(domain.V1)
+			ok, _ := r.checkDomain(domain.V1)
 			if ok == false {
 				r.addDomain(domain)
 			} else {
