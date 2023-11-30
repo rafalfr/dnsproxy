@@ -658,17 +658,19 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 
 			queryDomain := strings.Trim(rr.Name, "\n ")
 			queryDomain = strings.TrimSuffix(rr.Name, ".")
-			if Bdm.checkDomain(queryDomain) == true {
+			ok, blockedDomain := Bdm.checkDomain(queryDomain)
+			if ok == true {
 				if SM.Exists("blocked_domains::blocked_responses") {
 					SM.Set("blocked_domains::blocked_responses", SM.Get("blocked_domains::blocked_responses").(uint64)+1)
 				} else {
 					SM.Set("blocked_domains::blocked_responses", uint64(1))
 				}
 
-				if SM.Exists("blocked_domains::domains::" + queryDomain) {
-					SM.Set("blocked_domains::domains::"+queryDomain, SM.Get("blocked_domains::domains::"+queryDomain).(uint64)+1)
+				listName := Bdm.getDomainListName(blockedDomain)
+				if SM.Exists("blocked_domains::domains::" + listName + "::" + queryDomain) {
+					SM.Set("blocked_domains::domains::"+listName+"::"+queryDomain, SM.Get("blocked_domains::domains::"+listName+"::"+queryDomain).(uint64)+1)
 				} else {
-					SM.Set("blocked_domains::domains::"+queryDomain, uint64(1))
+					SM.Set("blocked_domains::domains::"+listName+"::"+queryDomain, uint64(1))
 				}
 
 				r := GenEmptyMessage(dctx.Req, dns.RcodeSuccess, retryNoError)

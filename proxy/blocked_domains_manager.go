@@ -6,9 +6,11 @@ import (
 	"bufio"
 	"github.com/AdguardTeam/dnsproxy/utils"
 	"github.com/AdguardTeam/golibs/log"
+	"github.com/barweiss/go-tuple"
 	. "github.com/golang-collections/collections/set"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -30,8 +32,9 @@ var Bdm = newBlockedDomainsManger()
 // BlockedDomainsManager is a class that manages blocked domains.
 type BlockedDomainsManager struct {
 	hosts      map[string]*Set
-	numDomains int
-	mux        sync.Mutex
+	numDomains       int
+	domainToListName map[string]string
+	mux              sync.Mutex
 }
 
 /**
@@ -47,6 +50,7 @@ func newBlockedDomainsManger() *BlockedDomainsManager {
 	defer p.mux.Unlock()
 	p.hosts = make(map[string]*Set)
 	p.numDomains = 0
+	p.domainToListName = make(map[string]string)
 	return &p
 }
 
@@ -79,12 +83,12 @@ func newBlockedDomainsManger() *BlockedDomainsManager {
  * Note: This method ensures thread safety by using a mutex to lock the critical
  * section of code.
  */
-func (r *BlockedDomainsManager) addDomain(domain string) {
+func (r *BlockedDomainsManager) addDomain(domain tuple.T2[string, string]) {
 
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
-	domainItems := strings.Split(domain, ".")
+	domainItems := strings.Split(domain.V1, ".")
 	reverse(domainItems)
 
 	_, ok := r.hosts[domainItems[0]]
@@ -92,44 +96,16 @@ func (r *BlockedDomainsManager) addDomain(domain string) {
 		r.hosts[domainItems[0]] = New()
 	}
 
-	if !r.hosts[domainItems[0]].Has(domain) {
+	if !r.hosts[domainItems[0]].Has(domain.V1) {
 		r.numDomains++
 	}
-	r.hosts[domainItems[0]].Insert(domain)
+	r.hosts[domainItems[0]].Insert(domain.V1)
 
+	r.domainToListName[domain.V1] = domain.V2
 }
 
-/**
- * checkDomain is a method of the BlockedDomainsManager class. It takes a domain
- * string as input and returns a boolean value. This method checks if the given
- * domain is blocked by searching for it in the list of blocked domains stored in
- * the hosts map of the BlockedDomainsManager instance.
- *
- * The method first acquires a lock on the mutex to ensure thread safety. It then
- * checks if the length of the hosts map is greater than 0. If it is, the method
- * proceeds with the domain check.
- *
- * The domain string is split into individual items using the dot (.) separator.
- * The last item is extracted to find the corresponding blockedDomains set in the
- * hosts map. If a match is found, the method checks if the domain is present in
- * the blockedDomains set. If it is, the method returns true.
- *
- * Next, the method iterates over the domain items from the first to the second
- * last item. It constructs a temporary domain string by concatenating the items
- * with a dot separator. This temporary domain string is then prefixed with "*."
- * to create a wildcard domain. The method checks if this wildcard domain is
- * present in the blockedDomains set. If it is, the method returns true.
- *
- * If no match is found in the blockedDomains set for both the original domain and
- * the wildcard domains, the method returns false.
- *
- * If the length of the hosts map is 0, indicating that there are no blocked
- * domains, the method returns false.
- *
- * Finally, the lock on the mutex is released using the defer statement to ensure
- * it is always unlocked, even in case of an early return.
- */
-func (r *BlockedDomainsManager) checkDomain(domain string) bool {
+
+func (r *BlockedDomainsManager) checkDomain(domain string) (bool,string) {
 
 	r.mux.Lock()
 	defer r.mux.Unlock()
@@ -140,7 +116,7 @@ func (r *BlockedDomainsManager) checkDomain(domain string) bool {
 		blockedDomains, ok := r.hosts[domainItems[len(domainItems)-1]]
 		if ok {
 			if blockedDomains.Has(domain) {
-				return true
+				return true, domain
 			}
 
 			for i := 0; i < len(domainItems); i++ {
@@ -152,16 +128,29 @@ func (r *BlockedDomainsManager) checkDomain(domain string) bool {
 				tmpDomain = "*." + tmpDomain
 
 				if blockedDomains.Has(tmpDomain) {
-					return true
+					return true, tmpDomain
 				}
 			}
-			return false
+			return false, domain
 		}
-		return false
+		return false, domain
 	} else {
-		return false
+		return false, domain
 	}
 }
+
+func (r *BlockedDomainsManager) getDomainListName(domain string) string {
+	r.mux.Lock()
+	defer r.mux.Unlock()
+
+	if listName, ok := r.domainToListName[domain]; ok {
+		return listName
+	}
+
+	return "unknown"
+}
+
+
 
 /**
  * getNumDomains returns the number of domains currently stored in the
@@ -265,18 +254,7 @@ func UpdateBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string)
 	}
 }
 
-/*
- * loadBlockedDomains is a method of the BlockedDomainsManager class. It takes a
- * pointer to a BlockedDomainsManager object (r) and a slice of strings
- * (blockedDomainsUrls) as input parameters.
- *
- * The method first acquires a lock on the mutex to ensure thread safety. It then
- * iterates over each blocked domain URL in the blockedDomainsUrls slice. It
- * extracts the file name from the URL and appends ".txt" if it doesn't already
- * have a file extension. It then checks if the file exists locally and retrieves
- * its size and modification time using the GetFileInfo function from the utils
- * package.
- */
+
 func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 
 	// https://github.com/xpzouying/go-practice/blob/master/read_file_line_by_line/main.go
@@ -309,7 +287,7 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 
 	r.clear()
 
-	allDomains := make([]string, 0)
+	allDomains :=make([]tuple.T2[string, string], 0)
 
 	for _, blockedDomainUrl := range blockedDomainsUrls {
 		tokens := strings.Split(blockedDomainUrl, "/")
@@ -317,6 +295,8 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 		if !strings.HasSuffix(filePath, ".txt") {
 			filePath += ".txt"
 		}
+
+		fileName := strings.TrimSuffix(filePath, filepath.Ext(filePath))
 
 		f, err := os.OpenFile(filePath, os.O_RDONLY, os.ModePerm)
 		if err != nil {
@@ -336,7 +316,7 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 			}
 			if !strings.HasPrefix(line, "#") {
 				line = strings.Trim(line, "\n ")
-				allDomains = append(allDomains, line)
+				allDomains = append(allDomains, tuple.New2(line,fileName))
 			}
 		}
 
@@ -348,13 +328,14 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 	}
 
 	sort.Slice(allDomains, func(i, j int) bool {
-		return len(allDomains[i]) < len(allDomains[j])
+		return len(allDomains[i].V1) < len(allDomains[j].V1)
 	})
 
 	numDuplicatedDomains := 0
 	for _, domain := range allDomains {
-		if Edm.checkDomain(domain) == false {
-			if r.checkDomain(domain) == false {
+		if Edm.checkDomain(domain.V1) == false {
+			ok, _ :=r.checkDomain(domain.V1)
+			if ok == false {
 				r.addDomain(domain)
 			} else {
 				numDuplicatedDomains++
