@@ -13,6 +13,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -282,27 +283,6 @@ func main() {
 	run(options)
 }
 
-// run starts and runs the DNS proxy server based on the provided options.
-// It sets the log level and log output file if specified in the options.
-// It also creates the proxy configuration, starts the proxy server,
-// and handles the termination signal to stop the proxy gracefully.
-//
-// Parameters:
-//
-//	options: A pointer to the Options struct containing the configuration options.
-//
-// Example:
-//
-//	options := &Options{
-//	  Verbose:    true,
-//	  LogOutput:  "/var/log/dnsproxy.log",
-//	  IPv6Disabled: false,
-//	  BlockedDomainsLists: []string{"blocked_domains.txt"},
-//	}
-//	run(options)
-//
-// Returns: None.
-// ...
 func run(options *Options) {
 	if options.Verbose {
 		log.SetLevel(log.DEBUG)
@@ -312,14 +292,15 @@ func run(options *Options) {
 		// configuration.
 		file, err := os.OpenFile(options.LogOutput, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
 		if err != nil {
-			log.Fatalf("cannot create a log file: %s", err)
+			//log.Fatalf("cannot create a log file: %s", err)
+			fmt.Printf("cannot create a log file: %s\n", err)
 		}
 
 		defer func() { _ = file.Close() }()
 		log.SetOutput(file)
 	}
 
-	runPprof(options)
+	//runPprof(options)
 
 	log.Info("Starting dnsproxy %s", version.Version())
 
@@ -347,7 +328,7 @@ func run(options *Options) {
 	}
 
 	s := gocron.NewScheduler(time.UTC)
-	_, err = s.Every(1).Day().At("05:00").Do(func() { proxy.UpdateBlockedDomains(proxy.Bdm, options.BlockedDomainsLists) })
+	_, err = s.Every(1).Day().At("02:10").Do(func() { proxy.UpdateBlockedDomains(proxy.Bdm, options.BlockedDomainsLists) })
 	if err != nil {
 		log.Error("Can't start blocked domains updater.")
 	}
@@ -358,6 +339,18 @@ func run(options *Options) {
 	_, err = s.Every(1).Hour().Do(func() { proxy.SM.SaveStats("stats.json") })
 	if err != nil {
 		log.Error("Can't start stats periodic save.")
+	}
+	_, err = s.Every(1).Day().At("02:15").Do(func() { proxy.SM.SaveStats("stats.json") })
+	if err != nil {
+		log.Error("Can't start stats periodic save at 02:15.")
+	}
+	_, err = s.Every(1).Day().At("02:20").Do(func() { proxy.FinishSignal <- true })
+	if err != nil {
+		log.Error("Can't start FinishSignal at 02:20.")
+	}
+	err = exec.Command("shutdown", "-h", "02:25").Run()
+	if err != nil {
+		log.Error("Can't start shutdown at 02:25.")
 	}
 
 	s.StartAsync()

@@ -31,58 +31,25 @@ var Bdm = newBlockedDomainsManger()
 
 // BlockedDomainsManager is a class that manages blocked domains.
 type BlockedDomainsManager struct {
-	hosts            map[string]*Set
-	domainToListName map[string]string
-	numDomains       int
-	mux              sync.Mutex
+	hosts             map[string]*Set
+	domainToListIndex map[string]int
+	blockedLists      []string
+	numDomains        int
+	mux               sync.Mutex
 }
 
-/**
- * newBlockedDomainsManager is a function that creates a new instance of the
- * BlockedDomainsManager struct. It initializes the struct with an empty map of
- * hosts and sets the number of domains to 0. The function returns a pointer to
- * the created instance.
- */
 func newBlockedDomainsManger() *BlockedDomainsManager {
 
 	p := BlockedDomainsManager{}
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	p.hosts = make(map[string]*Set)
-	p.domainToListName = make(map[string]string)
+	p.domainToListIndex = make(map[string]int)
+	p.blockedLists = make([]string, 0)
 	p.numDomains = 0
 	return &p
 }
 
-/**
- * addDomain is a method of the BlockedDomainsManager class. It adds a domain to
- * the list of blocked domains.
- *
- * Parameters:
- * - domain (string): The domain to be added.
- *
- * Locks:
- * - r.mux: Locks the mutex to ensure thread safety.
- *
- * Returns:
- * - None
- *
- * Behavior:
- * - Splits the domain string into individual items using the dot (".") as the
- * separator.
- * - Reverses the order of the domain items.
- * - Checks if the first item of the reversed domain items exists in the r.hosts
- * map.
- * - If the first item does not exist, creates a new instance of the map and
- * assigns it to r.hosts[domainItems[0]].
- * - Checks if the domain already exists in the map associated with the first item.
- * - If the domain does not exist, increments the count of the number of domains
- * (r.numDomains).
- * - Inserts the domain into the map associated with the first item.
- *
- * Note: This method ensures thread safety by using a mutex to lock the critical
- * section of code.
- */
 func (r *BlockedDomainsManager) addDomain(domain tuple.T2[string, string]) {
 
 	r.mux.Lock()
@@ -101,7 +68,16 @@ func (r *BlockedDomainsManager) addDomain(domain tuple.T2[string, string]) {
 	}
 	r.hosts[domainItems[0]].Insert(domain.V1)
 
-	r.domainToListName[domain.V1] = domain.V2
+	if len(r.blockedLists) == 0 {
+		r.blockedLists = append(r.blockedLists, domain.V2)
+	}
+
+	for i := 0; i < len(r.blockedLists); i++ {
+		if r.blockedLists[i] == domain.V2 {
+			r.domainToListIndex[domain.V1] = i
+			break
+		}
+	}
 }
 
 func (r *BlockedDomainsManager) checkDomain(domain string) (bool, string) {
@@ -142,27 +118,18 @@ func (r *BlockedDomainsManager) getDomainListName(domain string) string {
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
-	if listName, ok := r.domainToListName[domain]; ok {
-		return listName
+	if listIndex, ok := r.domainToListIndex[domain]; ok {
+
+		if listIndex < len(r.blockedLists) {
+			return r.blockedLists[listIndex]
+		} else {
+			return "unknown"
+		}
 	}
 
 	return "unknown"
 }
 
-/**
- * getNumDomains returns the number of domains currently stored in the
- * BlockedDomainsManager.
- *
- * Parameters:
- * - None
- *
- * Returns:
- * - int: The number of domains stored in the BlockedDomainsManager.
- *
- * Concurrency:
- * - This method is thread-safe and uses a mutex to ensure exclusive access to the
- * numDomains variable.
- */
 func (r *BlockedDomainsManager) getNumDomains() int {
 
 	r.mux.Lock()
@@ -171,50 +138,17 @@ func (r *BlockedDomainsManager) getNumDomains() int {
 	return r.numDomains
 }
 
-/**
- * clear method clears the list of blocked domains in the BlockedDomainsManager. It
- * acquires a lock on the mutex to ensure exclusive access to the data, and
- * releases the lock before returning. The method also resets the count of blocked
- * domains to zero.
- */
 func (r *BlockedDomainsManager) clear() {
 
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
 	clear(r.hosts)
+	clear(r.domainToListIndex)
+	clear(r.blockedLists)
 	r.numDomains = 0
-
-	clear(r.domainToListName)
 }
 
-/**
- * UpdateBlockedDomains is a function that updates the list of blocked domains in
- * the BlockedDomainsManager. It takes a pointer to a BlockedDomainsManager object
- * (r) and a slice of strings (blockedDomainsUrls) as input parameters.
- *
- * The function first calls the loadBlockedDomains function to load the blocked
- * domains from the specified URLs into the BlockedDomainsManager.
- *
- * Then, it iterates over each blocked domain URL in the blockedDomainsUrls slice.
- * It extracts the file name from the URL and appends ".txt" if it doesn't already
- * have a file extension. It then checks if the file exists locally and retrieves
- * its size and modification time using the GetFileInfo function from the utils
- * package.
- *
- * If the file doesn't exist locally or if its modification time is older than 6
- * hours or if the file size is 0, it checks if the remote file exists using the
- * CheckRemoteFileExists function from the utils package. If the remote file
- * exists, it removes the local file using os.Remove.
- *
- * After iterating over all the blocked domain URLs, if any of the conditions for
- * downloading the domains are met, the function calls the loadBlockedDomains
- * function again to update the BlockedDomainsManager with the latest blocked
- * domains.
- *
- * The function does not have an infinite loop commented out, so it will not
- * continuously update the blocked domains.
- */
 func UpdateBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 
 	//log.Info("updating domains")
@@ -295,6 +229,7 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 		}
 
 		fileName := strings.TrimSuffix(filePath, filepath.Ext(filePath))
+		r.blockedLists = append(r.blockedLists, fileName)
 
 		f, err := os.OpenFile(filePath, os.O_RDONLY, os.ModePerm)
 		if err != nil {
@@ -346,25 +281,6 @@ func loadBlockedDomains(r *BlockedDomainsManager, blockedDomainsUrls []string) {
 	log.Info("number of duplicated domains %d", numDuplicatedDomains)
 }
 
-/**
- * func MonitorLogFile(logFilePath string)
- *
- * MonitorLogFile is a function that monitors a log file specified by the
- * logFilePath parameter.
- *
- * Parameters:
- * - logFilePath (string): The path of the log file to be monitored.
- *
- * Description:
- * This function continuously monitors the specified log file. It checks if the
- * file exists and if its size exceeds 128 MB. If the file exists and its size is
- * larger than 128 MB, it is deleted.
- *
- * Note:
- * - The function does not return any value.
- * - The monitoring process can be terminated by sending a termination signal to
- * the function.
- */
 func MonitorLogFile(logFilePath string) {
 
 	ok, err := utils.FileExists(logFilePath)
