@@ -13,7 +13,6 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -344,14 +343,15 @@ func run(options *Options) {
 	if err != nil {
 		log.Error("Can't start stats periodic save at 02:15.")
 	}
-	_, err = s.Every(1).Day().At("02:20").Do(func() { proxy.FinishSignal <- true })
-	if err != nil {
-		log.Error("Can't start FinishSignal at 02:20.")
-	}
-	err = exec.Command("shutdown", "-h", "02:25").Run()
-	if err != nil {
-		log.Error("Can't start shutdown at 02:25.")
-	}
+
+	//_, err = s.Every(1).Day().At("02:20").Do(func() { proxy.FinishSignal <- true })
+	//if err != nil {
+	//	log.Error("Can't start FinishSignal at 02:20.")
+	//}
+	//err = exec.Command("shutdown", "-h", "02:25").Run()
+	//if err != nil {
+	//	log.Error("Can't start shutdown at 02:25.")
+	//}
 
 	s.StartAsync()
 	s.RunAll()
