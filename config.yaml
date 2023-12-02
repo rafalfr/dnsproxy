@@ -69,5 +69,12 @@ domains_excluded_from_blocking:
     - "*.blogspot.com"
     - "*.blogger.com"
     - "*.freedns.controld.com"
+    - "*.vpn-api.proton.me"
+    - "*.protonstatus.com"
+    - "*.protonvpn.ch"
+    - "*.protonvpn.com"
+    - "*.protonvpn.net"
+    - "*.ivpn.net"
+    - "*.mullvad.net"
 stats_port: 9999
 output: "/tmp/dnsproxy.log"
