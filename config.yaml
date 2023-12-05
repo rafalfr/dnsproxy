@@ -16,7 +16,7 @@ bootstrap:
 listen-addrs:
   - "0.0.0.0"
 listen-ports:
-  - 53
+  - 53000
 max-go-routines: 20
 ratelimit: 0
 http3: true
@@ -76,5 +76,6 @@ domains_excluded_from_blocking:
     - "*.protonvpn.net"
     - "*.ivpn.net"
     - "*.mullvad.net"
+    - "*.cleanbrowsing.org"
 stats_port: 9999
 output: "/tmp/dnsproxy.log"
