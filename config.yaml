@@ -16,7 +16,7 @@ bootstrap:
 listen-addrs:
   - "0.0.0.0"
 listen-ports:
-  - 53000
+  - 53
 max-go-routines: 20
 ratelimit: 0
 http3: true
@@ -55,6 +55,7 @@ timeout: '10s'
 cache: true
 cache-optimistic: true
 cache-size: 4194304
+ipv6-disabled: true
 blocked_domains_lists:
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/tif.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/ultimate.txt"
