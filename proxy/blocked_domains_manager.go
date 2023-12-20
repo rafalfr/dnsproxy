@@ -51,7 +51,6 @@ func newBlockedDomainsManger() *BlockedDomainsManager {
 }
 
 func (r *BlockedDomainsManager) addDomain(domain tuple.T2[string, string]) {
-
 	r.mux.Lock()
 	defer r.mux.Unlock()
 

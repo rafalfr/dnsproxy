@@ -327,7 +327,7 @@ func run(options *Options) {
 	}
 
 	s := gocron.NewScheduler(time.UTC)
-	_, err = s.Every(1).Day().At("02:10").Do(func() { proxy.UpdateBlockedDomains(proxy.Bdm, options.BlockedDomainsLists) })
+	_, err = s.Every(1).Day().At("02:01").Do(func() { proxy.UpdateBlockedDomains(proxy.Bdm, options.BlockedDomainsLists) })
 	if err != nil {
 		log.Error("Can't start blocked domains updater.")
 	}
