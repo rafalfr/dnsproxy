@@ -17,4 +17,10 @@ example.crt
 example.key
 coverage.txt
 stats.json
+*.key
+*.crt
+*.csr
+*.srl
+*.sh
+*.conf
 *.txt

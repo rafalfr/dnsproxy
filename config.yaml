@@ -10,6 +10,16 @@
 # https://github.com/DNSCrypt/dnscrypt-resolvers/blob/master/v3/public-resolvers.md
 # https://github.com/nickspaargaren/no-google/blob/master/google-domains
 # https://www.dnscry.pt/public-resolvers/
+
+# https://github.com/FiloSottile/mkcert
+# https://deliciousbrains.com/ssl-certificate-authority-for-local-https-development/
+# https://www.youtube.com/watch?v=SlcrTSvMioU
+# https://www.positioniseverything.net/x509-certificate-signed-by-unknown-authority/
+# https://stackoverflow.com/questions/64814173/how-do-i-use-sans-with-openssl-instead-of-common-name
+# https://tutorialedge.net/golang/creating-simple-web-server-with-golang/
+# https://stackoverflow.com/questions/10175812/how-to-generate-a-self-signed-ssl-certificate-using-openssl
+
+# https://www.baeldung.com/linux/add-self-signed-certificate-trusted-list
 ---
 bootstrap:
   - "9.9.9.9:53"
@@ -79,4 +89,13 @@ domains_excluded_from_blocking:
     - "*.mullvad.net"
     - "*.cleanbrowsing.org"
 stats_port: 9999
+https-port:
+  - 443
+tls-port:
+  - 853
+quic-port:
+  - 853
+tls-crt: "rfdns.freeddns.org.crt"
+tls-key: "rfdns.freeddns.org.key"
+insecure: true
 output: "/tmp/dnsproxy.log"
