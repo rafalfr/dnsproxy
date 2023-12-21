@@ -20,6 +20,7 @@
 # https://stackoverflow.com/questions/10175812/how-to-generate-a-self-signed-ssl-certificate-using-openssl
 
 # https://www.baeldung.com/linux/add-self-signed-certificate-trusted-list
+# https://github.com/ChristianLempa/cheat-sheets/blob/main/misc/ssl-certs.md
 ---
 bootstrap:
   - "9.9.9.9:53"
@@ -75,6 +76,7 @@ blocked_domains_lists:
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/doh-vpn-proxy-bypass.txt"
 fallback:
     - "quic://x-hagezi-ultimate.freedns.controld.com"
+    - "https://freedns.controld.com/no-ads-malware-typo"
 domains_excluded_from_blocking:
     - "*.wordpress.com"
     - "*.blogspot.com"
@@ -88,6 +90,7 @@ domains_excluded_from_blocking:
     - "*.ivpn.net"
     - "*.mullvad.net"
     - "*.cleanbrowsing.org"
+    - "*.freeddns.org"
 stats_port: 9999
 https-port:
   - 443

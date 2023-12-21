@@ -51,33 +51,33 @@ func newBlockedDomainsManger() *BlockedDomainsManager {
 }
 
 func (r *BlockedDomainsManager) addDomain(domain tuple.T2[string, string]) {
-	r.mux.Lock()
-	defer r.mux.Unlock()
-
-	domainItems := strings.Split(domain.V1, ".")
-	reverse(domainItems)
-
-	_, ok := r.hosts[domainItems[0]]
-	if !ok {
-		r.hosts[domainItems[0]] = New()
-	}
-
-	if !r.hosts[domainItems[0]].Has(domain.V1) {
-		r.numDomains++
-	}
-	r.hosts[domainItems[0]].Insert(domain.V1)
-
-	if len(r.blockedLists) == 0 {
-		r.blockedLists = append(r.blockedLists, domain.V2)
-	}
-
-	for i := 0; i < len(r.blockedLists); i++ {
-		if r.blockedLists[i] == domain.V2 {
-			r.domainToListIndex[domain.V1] = i
-			break
-		}
-	}
-}
+        r.mux.Lock()
+        defer r.mux.Unlock()
+        
+        domainItems := strings.Split(domain.V1, ".")
+        reverse(domainItems)
+        
+        _, ok := r.hosts[domainItems[0]]
+        if !ok {
+            r.hosts[domainItems[0]] = New()
+        }
+        
+        if !r.hosts[domainItems[0]].Has(domain.V1) {
+            r.numDomains++
+        }
+        r.hosts[domainItems[0]].Insert(domain.V1)
+        
+        if len(r.blockedLists) == 0 {
+            r.blockedLists = append(r.blockedLists, domain.V2)
+        }
+        
+        for i := 0; i < len(r.blockedLists); i++ {
+            if r.blockedLists[i] == domain.V2 {
+                r.domainToListIndex[domain.V1] = i
+                break
+            }
+        }
+    }
 
 func (r *BlockedDomainsManager) checkDomain(domain string) (bool, string) {
 
