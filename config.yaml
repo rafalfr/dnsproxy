@@ -77,6 +77,7 @@ blocked_domains_lists:
 fallback:
     - "quic://x-hagezi-ultimate.freedns.controld.com"
     - "https://freedns.controld.com/no-ads-malware-typo"
+    - "tls://dns-dot-no-safe-search.dnsforfamily.com"
 domains_excluded_from_blocking:
     - "*.wordpress.com"
     - "*.blogspot.com"
@@ -92,8 +93,6 @@ domains_excluded_from_blocking:
     - "*.cleanbrowsing.org"
     - "*.freeddns.org"
 stats_port: 9999
-https-port:
-  - 443
 tls-port:
   - 853
 quic-port:
