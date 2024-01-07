@@ -92,6 +92,8 @@ domains_excluded_from_blocking:
     - "*.mullvad.net"
     - "*.cleanbrowsing.org"
     - "*.freeddns.org"
+domains_excluded_from_caching:
+    - "*.freeddns.org"
 stats_port: 9999
 tls-port:
   - 853

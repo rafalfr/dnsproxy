@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/ameshkov/dnscrypt/v2"
+	"github.com/barweiss/go-tuple"
 	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v3"
 	"net"
@@ -215,6 +216,8 @@ type Options struct {
 	BlockedDomainsLists []string `yaml:"blocked_domains_lists" long:"blocked_domains_lists" description:"The blocked domains list to be used (can be specified multiple times)."`
 
 	DomainsExcludedFromBlockingLists []string `yaml:"domains_excluded_from_blocking" long:"domains_excluded_from_blocking" description:"A list of domains to be excluded from blocking lists (can be specified multiple times)."`
+
+	ExcludedFromCachingLists []string `yaml:"domains_excluded_from_caching" long:"domains_excluded_from_caching" description:"The list of domains to be excluded from caching (can be specified multiple times)."`
 }
 
 const (
@@ -324,6 +327,10 @@ func run(options *Options) {
 
 	for _, domain := range options.DomainsExcludedFromBlockingLists {
 		proxy.Edm.AddDomain(domain)
+	}
+
+	for _, domain := range options.ExcludedFromCachingLists {
+		proxy.Efcm.AddDomain(tuple.New2(domain, ""))
 	}
 
 	s := gocron.NewScheduler(time.UTC)

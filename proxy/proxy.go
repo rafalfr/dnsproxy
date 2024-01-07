@@ -286,14 +286,14 @@ func (p *Proxy) Start() (err error) {
 
 // closeAll closes all closers and appends the occurred errors to errs.
 func closeAll[C io.Closer](errs []error, closers ...C) (appended []error) {
-    for _, c := range closers {
-        err := c.Close()
-        if err != nil {
-            errs = append(errs, err)
-        }
-    }
-    
-    return errs
+	for _, c := range closers {
+		err := c.Close()
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errs
 }
 
 // Stop stops the proxy server including all its listeners
@@ -650,13 +650,13 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 
 	var ok bool
 	replyFromUpstream := true
-
+	var queryDomain string
 	// rafalfr code
 	for _, rr := range dctx.Req.Question {
 
 		if t := rr.Qtype; t == dns.TypeA || t == dns.TypeAAAA {
-
-			queryDomain := strings.Trim(rr.Name, "\n ")
+			queryDomain = ""
+			queryDomain = strings.Trim(rr.Name, "\n ")
 			queryDomain = strings.TrimSuffix(rr.Name, ".")
 			ok, blockedDomain := Bdm.checkDomain(queryDomain)
 			if ok == true {
@@ -725,9 +725,14 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 		// differ from validated ones.
 		//
 		// See https://github.com/imp/dnsmasq/blob/770bce967cfc9967273d0acfb3ea018fb7b17522/src/forward.c#L1169-L1172.
+		//
+
 		if cacheWorks && ok && !dctx.Res.CheckingDisabled {
-			// Cache the response with DNSSEC RRs.
-			p.cacheResp(dctx)
+			ok, queryDomain = Efcm.checkDomain(queryDomain)
+			if !ok {
+				// Cache the response with DNSSEC RRs.
+				p.cacheResp(dctx)
+			}
 		}
 	}
 
