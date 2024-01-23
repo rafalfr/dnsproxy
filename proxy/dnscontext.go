@@ -3,6 +3,7 @@ package proxy
 import (
 	"net"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/AdguardTeam/dnsproxy/upstream"
@@ -27,9 +28,7 @@ type DNSContext struct {
 	QUICStream quic.Stream
 
 	// Addr is the address of the client.
-	//
-	// TODO(s.chzhen):  Use [netip.AddrPort].
-	Addr net.Addr
+	Addr netip.AddrPort
 
 	// Upstream is the upstream that resolved the request.  In case of cached
 	// response it's nil.
@@ -47,9 +46,10 @@ type DNSContext struct {
 	// ReqECS is the EDNS Client Subnet used in the request.
 	ReqECS *net.IPNet
 
-	// CustomUpstreamConfig is only used for current request.  The Resolve
-	// method of Proxy uses it instead of the default servers if it's not nil.
-	CustomUpstreamConfig *UpstreamConfig
+	// CustomUpstreamConfig is the upstreams configuration used only for current
+	// request.  The Resolve method of Proxy uses it instead of the default
+	// servers if it's not nil.
+	CustomUpstreamConfig *CustomUpstreamConfig
 
 	// Req is the request message.
 	Req *dns.Msg
@@ -63,7 +63,7 @@ type DNSContext struct {
 	CachedUpstreamAddr string
 
 	// localIP - local IP address (for UDP socket to call udpMakeOOBWithSrc)
-	localIP net.IP
+	localIP netip.Addr
 
 	// QueryDuration is the duration of a successful query to an upstream
 	// server or, if the upstream server is unavailable, to a fallback server.
@@ -157,3 +157,53 @@ const (
 	// DoQv1 represents DoQ v1.0: https://www.rfc-editor.org/rfc/rfc9250.html.
 	DoQv1 DoQVersion = 0x01
 )
+
+// CustomUpstreamConfig contains upstreams configuration with an optional cache.
+type CustomUpstreamConfig struct {
+	// upstream is the upstream configuration.
+	upstream *UpstreamConfig
+
+	// cache is an optional cache for upstreams in the current configuration.
+	// It is disabled if nil.
+	//
+	// TODO(d.kolyshev): Move this cache to [UpstreamConfig].
+	cache *cache
+}
+
+// NewCustomUpstreamConfig returns new custom upstream configuration.
+func NewCustomUpstreamConfig(
+	u *UpstreamConfig,
+	cacheEnabled bool,
+	cacheSize int,
+	enableEDNSClientSubnet bool,
+) (c *CustomUpstreamConfig) {
+	var customCache *cache
+	if cacheEnabled {
+		// TODO(d.kolyshev): Support optimistic with newOptimisticResolver.
+		customCache = newCache(cacheSize, enableEDNSClientSubnet, false)
+	}
+
+	return &CustomUpstreamConfig{
+		upstream: u,
+		cache:    customCache,
+	}
+}
+
+// Close closes the custom upstream config.
+func (c *CustomUpstreamConfig) Close() (err error) {
+	if c.upstream == nil {
+		return nil
+	}
+
+	return c.upstream.Close()
+}
+
+// ClearCache removes all items from the cache.
+func (c *CustomUpstreamConfig) ClearCache() {
+	if c.cache == nil {
+		return
+	}
+
+	c.cache.clearItems()
+	c.cache.clearItemsWithSubnet()
+}

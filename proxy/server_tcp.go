@@ -12,6 +12,8 @@ import (
 	proxynetutil "github.com/AdguardTeam/dnsproxy/internal/netutil"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
+	"github.com/AdguardTeam/golibs/netutil"
+	"github.com/AdguardTeam/golibs/syncutil"
 	"github.com/miekg/dns"
 )
 
@@ -59,8 +61,8 @@ func (p *Proxy) createTLSListeners() (err error) {
 // tcpPacketLoop listens for incoming TCP packets.  proto must be either "tcp"
 // or "tls".
 //
-// See also the comment on Proxy.requestGoroutinesSema.
-func (p *Proxy) tcpPacketLoop(l net.Listener, proto Proto, requestGoroutinesSema semaphore) {
+// See also the comment on Proxy.requestsSema.
+func (p *Proxy) tcpPacketLoop(l net.Listener, proto Proto, reqSema syncutil.Semaphore) {
 	log.Info("dnsproxy: entering %s listener loop on %s", proto, l.Addr())
 
 	for {
@@ -75,10 +77,17 @@ func (p *Proxy) tcpPacketLoop(l net.Listener, proto Proto, requestGoroutinesSema
 			break
 		}
 
-		requestGoroutinesSema.acquire()
+		// TODO(d.kolyshev): Pass and use context from above.
+		err = reqSema.Acquire(context.Background())
+		if err != nil {
+			log.Error("dnsproxy: tcp: acquiring semaphore: %s", err)
+
+			break
+		}
 		go func() {
+			defer reqSema.Release()
+
 			p.handleTCPConnection(clientConn, proto)
-			requestGoroutinesSema.release()
 		}()
 	}
 }
@@ -126,7 +135,7 @@ func (p *Proxy) handleTCPConnection(conn net.Conn, proto Proto) {
 		}
 
 		d := p.newDNSContext(proto, req)
-		d.Addr = conn.RemoteAddr()
+		d.Addr = netutil.NetAddrToAddrPort(conn.RemoteAddr())
 		d.Conn = conn
 
 		err = p.handleDNSRequest(d)

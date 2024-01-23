@@ -20,15 +20,18 @@ import (
 	"syscall"
 	"time"
 
+	proxynetutil "github.com/AdguardTeam/dnsproxy/internal/netutil"
 	"github.com/AdguardTeam/dnsproxy/internal/version"
 	"github.com/AdguardTeam/dnsproxy/proxy"
 	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/mathutil"
 	"github.com/AdguardTeam/golibs/netutil"
+	"github.com/AdguardTeam/golibs/osutil"
 	"github.com/AdguardTeam/golibs/timeutil"
 	"github.com/go-co-op/gocron"
 	goFlags "github.com/jessevdk/go-flags"
+	"gopkg.in/yaml.v3"
 )
 
 // Options represents console arguments.  For further additions, please do not
@@ -150,11 +153,11 @@ type Options struct {
 
 	// RatelimitSubnetLenIPv4 is a subnet length for IPv4 addresses used for
 	// rate limiting requests
-	RatelimitSubnetLenIPv4 int `yaml:"ratelimit-subnet-len-v4" long:"ratelimit-subnet-len-ipv4" description:"Ratelimit subnet length for IPv4." default:"24"`
+	RatelimitSubnetLenIPv4 int `yaml:"ratelimit-subnet-len-ipv4" long:"ratelimit-subnet-len-ipv4" description:"Ratelimit subnet length for IPv4." default:"24"`
 
 	// RatelimitSubnetLenIPv6 is a subnet length for IPv6 addresses used for
 	// rate limiting requests
-	RatelimitSubnetLenIPv6 int `yaml:"ratelimit-subnet-len-v6" long:"ratelimit-subnet-len-ipv6" description:"Ratelimit subnet length for IPv6." default:"64"`
+	RatelimitSubnetLenIPv6 int `yaml:"ratelimit-subnet-len-ipv6" long:"ratelimit-subnet-len-ipv6" description:"Ratelimit subnet length for IPv6." default:"56"`
 
 	// If true, refuse ANY requests
 	RefuseAny bool `yaml:"refuse-any" long:"refuse-any" description:"If specified, refuse ANY requests" optional:"yes" optional-value:"true"`
@@ -199,8 +202,8 @@ type Options struct {
 	// UDP buffer size value
 	UDPBufferSize int `yaml:"udp-buf-size" long:"udp-buf-size" description:"Set the size of the UDP buffer in bytes. A value <= 0 will use the system default."`
 
-	// The maximum number of go routines
-	MaxGoRoutines int `yaml:"max-go-routines" long:"max-go-routines" description:"Set the maximum number of go routines. A value <= 0 will not not set a maximum."`
+	// MaxGoRoutines is the maximum number of goroutines.
+	MaxGoRoutines uint `yaml:"max-go-routines" long:"max-go-routines" description:"Set the maximum number of go routines. A zero value will not not set a maximum."`
 
 	// Pprof defines whether the pprof information needs to be exposed via
 	// localhost:6060 or not.
@@ -224,25 +227,6 @@ const (
 	defaultLocalTimeout = 1 * time.Second
 )
 
-/**
- * The `main` function is the entry point of the program. It initializes an
- * `Options` struct and parses command line arguments.
- *
- * The function iterates over the command line arguments and checks if the
- * `--version` flag is present. If it is, the program prints the version
- * information and exits.
- *
- * Next, the function manually parses the `--config-path` flag and reads the
- * specified configuration file. The file contents are unmarshaled into the
- * `options` struct.
- *
- * After that, the function creates a parser using the `goFlags` package and
- * attempts to parse the remaining command line arguments. If parsing fails, the
- * program exits with an error.
- *
- * Finally, the `run` function is called with the parsed options to start the
- * program's execution.
- */
 func main() {
 	options := &Options{}
 
@@ -427,8 +411,8 @@ func runPprof(options *Options) {
 // createProxyConfig creates proxy.Config from the command line arguments
 func createProxyConfig(options *Options) (conf proxy.Config) {
 	conf = proxy.Config{
-		RatelimitSubnetMaskIPv4: net.CIDRMask(options.RatelimitSubnetLenIPv4, netutil.IPv4BitLen),
-		RatelimitSubnetMaskIPv6: net.CIDRMask(options.RatelimitSubnetLenIPv6, netutil.IPv6BitLen),
+		RatelimitSubnetLenIPv4: options.RatelimitSubnetLenIPv4,
+		RatelimitSubnetLenIPv6: options.RatelimitSubnetLenIPv6,
 
 		Ratelimit:       options.Ratelimit,
 		CacheEnabled:    options.Cache,
@@ -438,10 +422,13 @@ func createProxyConfig(options *Options) (conf proxy.Config) {
 		CacheOptimistic: options.CacheOptimistic,
 		RefuseAny:       options.RefuseAny,
 		HTTP3:           options.HTTP3,
-		// TODO(e.burkov):  The following CIDRs are aimed to match any
-		// address.  This is not quite proper approach to be used by
-		// default so think about configuring it.
-		TrustedProxies:         []string{"0.0.0.0/0", "::0/0"},
+		// TODO(e.burkov):  The following CIDRs are aimed to match any address.
+		// This is not quite proper approach to be used by default so think
+		// about configuring it.
+		TrustedProxies: netutil.SliceSubnetSet{
+			netip.MustParsePrefix("0.0.0.0/0"),
+			netip.MustParsePrefix("::0/0"),
+		},
 		EnableEDNSClientSubnet: options.EnableEDNSSubnet,
 		UDPBufferSize:          options.UDPBufferSize,
 		HTTPSServerName:        options.HTTPSServerName,
@@ -493,13 +480,21 @@ func initUpstreams(config *proxy.Config, options *Options) {
 		}
 	}
 
-	var err error
-
 	timeout := options.Timeout.Duration
+	bootOpts := &upstream.Options{
+		HTTPVersions:       httpVersions,
+		InsecureSkipVerify: options.Insecure,
+		Timeout:            timeout,
+	}
+	boot, err := initBootstrap(options.BootstrapDNS, bootOpts)
+	if err != nil {
+		log.Fatalf("error while initializing bootstrap: %s", err)
+	}
+
 	upsOpts := &upstream.Options{
 		HTTPVersions:       httpVersions,
 		InsecureSkipVerify: options.Insecure,
-		Bootstrap:          options.BootstrapDNS,
+		Bootstrap:          boot,
 		Timeout:            timeout,
 	}
 	upstreams := loadServersList(options.Upstreams)
@@ -511,7 +506,7 @@ func initUpstreams(config *proxy.Config, options *Options) {
 
 	privUpsOpts := &upstream.Options{
 		HTTPVersions: httpVersions,
-		Bootstrap:    options.BootstrapDNS,
+		Bootstrap:    boot,
 		Timeout:      mathutil.Min(defaultLocalTimeout, timeout),
 	}
 	privUpstreams := loadServersList(options.PrivateRDNSUpstreams)
@@ -543,6 +538,39 @@ func initUpstreams(config *proxy.Config, options *Options) {
 	}
 }
 
+// initBootstrap initializes the [upstream.Resolver] for bootstrapping upstream
+// servers.  It returns the default resolver if no bootstraps were specified.
+// The returned resolver will also use system hosts files first.
+func initBootstrap(bootstraps []string, opts *upstream.Options) (r upstream.Resolver, err error) {
+	var resolvers []upstream.Resolver
+
+	for i, b := range bootstraps {
+		var ur *upstream.UpstreamResolver
+		ur, err = upstream.NewUpstreamResolver(b, opts)
+		if err != nil {
+			return nil, fmt.Errorf("creating bootstrap resolver at index %d: %w", i, err)
+		}
+
+		resolvers = append(resolvers, upstream.NewCachingResolver(ur))
+	}
+
+	switch len(resolvers) {
+	case 0:
+		etcHosts, hostsErr := upstream.NewDefaultHostsResolver(osutil.RootDirFS())
+		if hostsErr != nil {
+			log.Error("creating default hosts resolver: %s", hostsErr)
+
+			return net.DefaultResolver, nil
+		}
+
+		return upstream.ConsequentResolver{etcHosts, net.DefaultResolver}, nil
+	case 1:
+		return resolvers[0], nil
+	default:
+		return upstream.ParallelResolver(resolvers), nil
+	}
+}
+
 // initEDNS inits EDNS-related config
 func initEDNS(config *proxy.Config, options *Options) {
 	if options.EDNSAddr != "" {
@@ -564,15 +592,13 @@ func initBogusNXDomain(config *proxy.Config, options *Options) {
 		return
 	}
 
-	for _, s := range options.BogusNXDomain {
-		subnet, err := netutil.ParseSubnet(s)
+	for i, s := range options.BogusNXDomain {
+		p, err := proxynetutil.ParseSubnet(s)
 		if err != nil {
-			log.Error("%s", err)
-
-			continue
+			log.Error("parsing bogus nxdomain subnet at index %d: %s", i, err)
+		} else {
+			config.BogusNXDomain = append(config.BogusNXDomain, p)
 		}
-
-		config.BogusNXDomain = append(config.BogusNXDomain, subnet)
 	}
 }
 
@@ -615,7 +641,7 @@ func initDNSCryptConfig(config *proxy.Config, options *Options) {
 
 // initListenAddrs inits listen addrs
 func initListenAddrs(config *proxy.Config, options *Options) {
-	var listenIPs []net.IP
+	listenIPs := []netip.Addr{}
 
 	if len(options.ListenAddrs) == 0 {
 		// If ListenAddrs has not been parsed through config file nor command
@@ -629,22 +655,24 @@ func initListenAddrs(config *proxy.Config, options *Options) {
 		options.ListenPorts = []int{53}
 	}
 
-	for _, a := range options.ListenAddrs {
-		ip := net.ParseIP(a)
-		if ip == nil {
-			log.Fatalf("cannot parse %s", a)
+	for i, a := range options.ListenAddrs {
+		ip, err := netip.ParseAddr(a)
+		if err != nil {
+			log.Fatalf("parsing listen address at index %d: %s", i, a)
 		}
+
 		listenIPs = append(listenIPs, ip)
 	}
 
 	if len(options.ListenPorts) != 0 && options.ListenPorts[0] != 0 {
 		for _, port := range options.ListenPorts {
 			for _, ip := range listenIPs {
+				p := uint16(port)
 
-				ua := &net.UDPAddr{Port: port, IP: ip}
+				ua := net.UDPAddrFromAddrPort(netip.AddrPortFrom(ip, p))
 				config.UDPListenAddr = append(config.UDPListenAddr, ua)
 
-				ta := &net.TCPAddr{Port: port, IP: ip}
+				ta := net.TCPAddrFromAddrPort(netip.AddrPortFrom(ip, p))
 				config.TCPListenAddr = append(config.TCPListenAddr, ta)
 			}
 		}
@@ -653,21 +681,21 @@ func initListenAddrs(config *proxy.Config, options *Options) {
 	if config.TLSConfig != nil {
 		for _, port := range options.TLSListenPorts {
 			for _, ip := range listenIPs {
-				a := &net.TCPAddr{Port: port, IP: ip}
+				a := net.TCPAddrFromAddrPort(netip.AddrPortFrom(ip, uint16(port)))
 				config.TLSListenAddr = append(config.TLSListenAddr, a)
 			}
 		}
 
 		for _, port := range options.HTTPSListenPorts {
 			for _, ip := range listenIPs {
-				a := &net.TCPAddr{Port: port, IP: ip}
+				a := net.TCPAddrFromAddrPort(netip.AddrPortFrom(ip, uint16(port)))
 				config.HTTPSListenAddr = append(config.HTTPSListenAddr, a)
 			}
 		}
 
 		for _, port := range options.QUICListenPorts {
 			for _, ip := range listenIPs {
-				a := &net.UDPAddr{Port: port, IP: ip}
+				a := net.UDPAddrFromAddrPort(netip.AddrPortFrom(ip, uint16(port)))
 				config.QUICListenAddr = append(config.QUICListenAddr, a)
 			}
 		}
@@ -676,10 +704,10 @@ func initListenAddrs(config *proxy.Config, options *Options) {
 	if config.DNSCryptResolverCert != nil && config.DNSCryptProviderName != "" {
 		for _, port := range options.DNSCryptListenPorts {
 			for _, ip := range listenIPs {
-				tcp := &net.TCPAddr{Port: port, IP: ip}
+				tcp := net.TCPAddrFromAddrPort(netip.AddrPortFrom(ip, uint16(port)))
 				config.DNSCryptTCPListenAddr = append(config.DNSCryptTCPListenAddr, tcp)
 
-				udp := &net.UDPAddr{Port: port, IP: ip}
+				udp := net.UDPAddrFromAddrPort(netip.AddrPortFrom(ip, uint16(port)))
 				config.DNSCryptUDPListenAddr = append(config.DNSCryptUDPListenAddr, udp)
 			}
 		}

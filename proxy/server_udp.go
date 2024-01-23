@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 
 	proxynetutil "github.com/AdguardTeam/dnsproxy/internal/netutil"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
+	"github.com/AdguardTeam/golibs/netutil"
+	"github.com/AdguardTeam/golibs/syncutil"
 	"github.com/miekg/dns"
 )
 
@@ -58,8 +61,8 @@ func (p *Proxy) udpCreate(ctx context.Context, udpAddr *net.UDPAddr) (*net.UDPCo
 
 // udpPacketLoop listens for incoming UDP packets.
 //
-// See also the comment on Proxy.requestGoroutinesSema.
-func (p *Proxy) udpPacketLoop(conn *net.UDPConn, requestGoroutinesSema semaphore) {
+// See also the comment on Proxy.requestsSema.
+func (p *Proxy) udpPacketLoop(conn *net.UDPConn, reqSema syncutil.Semaphore) {
 	log.Info("dnsproxy: entering udp listener loop on %s", conn.LocalAddr())
 
 	b := make([]byte, dns.MaxMsgSize)
@@ -77,10 +80,18 @@ func (p *Proxy) udpPacketLoop(conn *net.UDPConn, requestGoroutinesSema semaphore
 			// we need the contents to survive the call because we're handling them in goroutine
 			packet := make([]byte, n)
 			copy(packet, b)
-			requestGoroutinesSema.acquire()
+
+			// TODO(d.kolyshev): Pass and use context from above.
+			sErr := reqSema.Acquire(context.Background())
+			if sErr != nil {
+				log.Error("dnsproxy: udp: acquiring semaphore: %s", sErr)
+
+				break
+			}
 			go func() {
+				defer reqSema.Release()
+
 				p.udpHandlePacket(packet, localIP, remoteAddr, conn)
-				requestGoroutinesSema.release()
 			}()
 		}
 		if err != nil {
@@ -96,8 +107,13 @@ func (p *Proxy) udpPacketLoop(conn *net.UDPConn, requestGoroutinesSema semaphore
 }
 
 // udpHandlePacket processes the incoming UDP packet and sends a DNS response
-func (p *Proxy) udpHandlePacket(packet []byte, localIP net.IP, remoteAddr *net.UDPAddr, conn *net.UDPConn) {
-	//log.Debug("dnsproxy: handling new udp packet from %s", remoteAddr)
+func (p *Proxy) udpHandlePacket(
+	packet []byte,
+	localIP netip.Addr,
+	remoteAddr *net.UDPAddr,
+	conn *net.UDPConn,
+) {
+	log.Debug("dnsproxy: handling new udp packet from %s", remoteAddr)
 
 	req := &dns.Msg{}
 	err := req.Unpack(packet)
@@ -108,7 +124,7 @@ func (p *Proxy) udpHandlePacket(packet []byte, localIP net.IP, remoteAddr *net.U
 	}
 
 	d := p.newDNSContext(ProtoUDP, req)
-	d.Addr = remoteAddr
+	d.Addr = netutil.NetAddrToAddrPort(remoteAddr)
 	d.Conn = conn
 	d.localIP = localIP
 
@@ -133,7 +149,7 @@ func (p *Proxy) respondUDP(d *DNSContext) error {
 	}
 
 	conn := d.Conn.(*net.UDPConn)
-	rAddr := d.Addr.(*net.UDPAddr)
+	rAddr := net.UDPAddrFromAddrPort(d.Addr)
 	n, err := proxynetutil.UDPWrite(bytes, conn, rAddr, d.localIP)
 	if err != nil {
 		if errors.Is(err, net.ErrClosed) {

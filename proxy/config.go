@@ -65,24 +65,31 @@ type Config struct {
 
 	// Rate-limiting and anti-DNS amplification measures
 	// --
+	//
+	// TODO(s.chzhen):  Extract ratelimit settings to a separate structure.
 
-	// RatelimitSubnetMaskIPv4 is a subnet mask for IPv4 addresses used for
+	// RatelimitSubnetLenIPv4 is a subnet length for IPv4 addresses used for
 	// rate limiting requests.
-	RatelimitSubnetMaskIPv4 net.IPMask
+	RatelimitSubnetLenIPv4 int
 
-	// RatelimitSubnetMaskIPv6 is a subnet mask for IPv6 addresses used for
+	// RatelimitSubnetLenIPv6 is a subnet length for IPv6 addresses used for
 	// rate limiting requests.
-	RatelimitSubnetMaskIPv6 net.IPMask
+	RatelimitSubnetLenIPv6 int
 
-	Ratelimit          int      // max number of requests per second from a given IP (0 to disable)
-	RatelimitWhitelist []string // a list of whitelisted client IP addresses
-	RefuseAny          bool     // if true, refuse ANY requests
+	// Ratelimit is a maximum number of requests per second from a given IP (0
+	// to disable).
+	Ratelimit int
 
-	// TrustedProxies is the list of IP addresses and CIDR networks to
-	// detect proxy servers addresses the DoH requests from which should be
-	// handled.  The value of nil or an empty slice for this field makes
-	// Proxy not trust any address.
-	TrustedProxies []string
+	// RatelimitWhitelist is a list of IP addresses excluded from rate limiting.
+	RatelimitWhitelist []netip.Addr
+
+	// RefuseAny makes proxy refuse the requests of type ANY.
+	RefuseAny bool
+
+	// TrustedProxies is the trusted list of CIDR networks to detect proxy
+	// servers addresses from where the DoH requests should be handled.  The
+	// value of nil makes Proxy not trust any address.
+	TrustedProxies netutil.SubnetSet
 
 	// Upstream DNS servers and their settings
 	// --
@@ -111,7 +118,7 @@ type Config struct {
 	// BogusNXDomain is the set of networks used to transform responses into
 	// NXDOMAIN ones if they contain at least a single IP address within these
 	// networks.  It's similar to dnsmasq's "bogus-nxdomain".
-	BogusNXDomain []*net.IPNet
+	BogusNXDomain []netip.Prefix
 
 	// Enable EDNS Client Subnet option DNS requests to the upstream server will
 	// contain an OPT record with Client Subnet option.  If the original request
@@ -174,7 +181,7 @@ type Config struct {
 	// TODO(a.garipov): Rename this to something like
 	// “MaxDNSRequestGoroutines” in a later major version, as it doesn't
 	// actually limit all goroutines.
-	MaxGoroutines int
+	MaxGoroutines uint
 
 	// The size of the read buffer on the underlying socket. Larger read buffers can handle
 	// larger bursts of requests before packets get dropped.
@@ -240,22 +247,27 @@ func (p *Proxy) validateRatelimit() (err error) {
 		return nil
 	}
 
-	if p.RatelimitSubnetMaskIPv4 == nil {
-		return errors.Error("ipv4 subnet mask is nil")
+	err = checkInclusion(p.RatelimitSubnetLenIPv4, 0, netutil.IPv4BitLen)
+	if err != nil {
+		return fmt.Errorf("ratelimit subnet len ipv4 is invalid: %w", err)
 	}
 
-	_, bits := p.RatelimitSubnetMaskIPv4.Size()
-	if bits != netutil.IPv4BitLen {
-		return fmt.Errorf("ipv4 subnet mask must contain %d bits, got %d", netutil.IPv4BitLen, bits)
+	err = checkInclusion(p.RatelimitSubnetLenIPv6, 0, netutil.IPv6BitLen)
+	if err != nil {
+		return fmt.Errorf("ratelimit subnet len ipv6 is invalid: %w", err)
 	}
 
-	if p.RatelimitSubnetMaskIPv6 == nil {
-		return errors.Error("ipv6 subnet is nil")
-	}
+	return nil
+}
 
-	_, bits = p.RatelimitSubnetMaskIPv6.Size()
-	if bits != netutil.IPv6BitLen {
-		return fmt.Errorf("ipv6 subnet mask must contain %d bits, got %d", netutil.IPv6BitLen, bits)
+// checkInclusion returns an error if a n is not in the inclusive range between
+// minN and maxN.
+func checkInclusion(n, minN, maxN int) (err error) {
+	switch {
+	case n < minN:
+		return fmt.Errorf("value %d less than min %d", n, minN)
+	case n > maxN:
+		return fmt.Errorf("value %d greater than max %d", n, maxN)
 	}
 
 	return nil
@@ -268,14 +280,11 @@ func (p *Proxy) logConfigInfo() {
 	}
 
 	if p.Ratelimit > 0 {
-		sizeV4, _ := p.RatelimitSubnetMaskIPv4.Size()
-		sizeV6, _ := p.RatelimitSubnetMaskIPv6.Size()
-
 		log.Info(
 			"Ratelimit is enabled and set to %d rps, IPv4 subnet mask len %d, IPv6 subnet mask len %d",
 			p.Ratelimit,
-			sizeV4,
-			sizeV6,
+			p.RatelimitSubnetLenIPv4,
+			p.RatelimitSubnetLenIPv6,
 		)
 	}
 

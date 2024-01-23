@@ -13,6 +13,7 @@ import (
 
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/miekg/dns"
+	"github.com/quic-go/quic-go"
 )
 
 // TODO (rafalfr): nothing to do
@@ -58,15 +59,15 @@ func (p *Proxy) startListeners(ctx context.Context) error {
 	}
 
 	for _, l := range p.udpListen {
-		go p.udpPacketLoop(l, p.requestGoroutinesSema)
+		go p.udpPacketLoop(l, p.requestsSema)
 	}
 
 	for _, l := range p.tcpListen {
-		go p.tcpPacketLoop(l, ProtoTCP, p.requestGoroutinesSema)
+		go p.tcpPacketLoop(l, ProtoTCP, p.requestsSema)
 	}
 
 	for _, l := range p.tlsListen {
-		go p.tcpPacketLoop(l, ProtoTLS, p.requestGoroutinesSema)
+		go p.tcpPacketLoop(l, ProtoTLS, p.requestsSema)
 	}
 
 	for _, l := range p.httpsListen {
@@ -78,7 +79,7 @@ func (p *Proxy) startListeners(ctx context.Context) error {
 	}
 
 	for _, l := range p.quicListen {
-		go p.quicPacketLoop(l, p.requestGoroutinesSema)
+		go p.quicPacketLoop(l, p.requestsSema)
 	}
 
 	for _, l := range p.dnsCryptUDPListen {
@@ -94,8 +95,7 @@ func (p *Proxy) startListeners(ctx context.Context) error {
 
 // handleDNSRequest processes the incoming packet bytes and returns with an optional response packet.
 func (p *Proxy) handleDNSRequest(d *DNSContext) error {
-	//d.StartTime = time.Now()
-	p.logDNSMessage(d, "req")
+	p.logDNSMessage(d.Req)
 
 	if d.Req.Response {
 		//log.Debug("Dropping incoming Reply packet from %s", d.Addr.String())
@@ -116,7 +116,7 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 	}
 
 	// ratelimit based on IP only, protects CPU cycles and outbound connections
-	if d.Proto == ProtoUDP && p.isRatelimited(d.Addr) {
+	if d.Proto == ProtoUDP && p.isRatelimited(d.Addr.Addr()) {
 		//log.Tracef("Ratelimiting %v based on IP only", d.Addr)
 		return nil // do nothing, don't reply, we got ratelimited
 	}
@@ -152,7 +152,7 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 		}
 	}
 
-	p.logDNSMessage(d, "res")
+	p.logDNSMessage(d.Res)
 	p.respond(d)
 
 	return err
@@ -223,17 +223,7 @@ func (p *Proxy) genWithRCode(req *dns.Msg, code int) (resp *dns.Msg) {
 	return resp
 }
 
-// logDNSMessage logs the DNS message type (Req or Res) to the logger and increments the appropriate counter based on the message type
-func (p *Proxy) logDNSMessage(d *DNSContext, messageType string) {
-
-	var m *dns.Msg
-	if messageType == "req" {
-		m = d.Req
-	}
-	if messageType == "res" {
-		m = d.Res
-	}
-
+func (p *Proxy) logDNSMessage(m *dns.Msg) {
 	if m == nil {
 		return
 	}

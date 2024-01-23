@@ -11,9 +11,9 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/AdguardTeam/dnsproxy/internal/bootstrap"
@@ -25,7 +25,6 @@ import (
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/logging"
-	"golang.org/x/exp/slices"
 )
 
 // Upstream is an interface for a DNS resolver.
@@ -78,16 +77,9 @@ type Options struct {
 	// CipherSuites is a custom list of TLSv1.2 ciphers.
 	CipherSuites []uint16
 
-	// Bootstrap is a list of DNS servers to be used to resolve DoH/DoT/DoQ
-	// hostnames.  Plain DNS, DNSCrypt, or DoH/DoT/DoQ with IP addresses (not
-	// hostnames) could be used.  Those servers will be turned to upstream
-	// servers and will be closed as soon as the resolved upstream itself is
-	// closed.
-	Bootstrap []string
-
-	// List of IP addresses of the upstream DNS server.  If not empty, bootstrap
-	// DNS servers won't be used at all.
-	ServerIPAddrs []net.IP
+	// Bootstrap is used to resolve upstreams' hostnames.  If nil, the
+	// [net.DefaultResolver] will be used.
+	Bootstrap Resolver
 
 	// HTTPVersions is a list of HTTP versions that should be supported by the
 	// DNS-over-HTTPS client.  If not set, HTTP/1.1 and HTTP/2 will be used.
@@ -110,7 +102,6 @@ func (o *Options) Clone() (clone *Options) {
 	return &Options{
 		Bootstrap:                 o.Bootstrap,
 		Timeout:                   o.Timeout,
-		ServerIPAddrs:             o.ServerIPAddrs,
 		HTTPVersions:              o.HTTPVersions,
 		VerifyServerCertificate:   o.VerifyServerCertificate,
 		VerifyConnection:          o.VerifyConnection,
@@ -244,14 +235,13 @@ func parseStamp(upsURL *url.URL, opts *Options) (u Upstream, err error) {
 			host = stamp.ServerAddrStr
 		}
 
-		// Parse and add to options.
-		ip := net.ParseIP(host)
-		if ip == nil {
+		var ip netip.Addr
+		ip, err = netip.ParseAddr(host)
+		if err != nil {
 			return nil, fmt.Errorf("invalid server stamp address %s", stamp.ServerAddrStr)
 		}
 
-		// TODO(e.burkov):  Append?
-		opts.ServerIPAddrs = []net.IP{ip}
+		opts.Bootstrap = StaticResolver{ip}
 	}
 
 	switch stamp.Proto {
@@ -285,142 +275,75 @@ func addPort(u *url.URL, port uint16) {
 // logBegin logs the start of DNS request resolution.  It should be called right
 // before dialing the connection to the upstream.  n is the [network] that will
 // be used to send the request.
-func logBegin(upsAddr string, n network, req *dns.Msg) {
-	qtype := ""
-	target := ""
+func logBegin(addr string, n network, req *dns.Msg) {
+	var qtype dns.Type
+	var qname string
 	if len(req.Question) != 0 {
-		qtype = dns.Type(req.Question[0].Qtype).String()
-		target = req.Question[0].Name
+		qtype = dns.Type(req.Question[0].Qtype)
+		qname = req.Question[0].Name
 	}
 
-	log.Debug("dnsproxy: %s: sending request over %s: %s %s", upsAddr, n, qtype, target)
+	log.Debug("dnsproxy: sending request to %s over %s: %s %q", addr, n, qtype, qname)
 }
 
-// Write to log about the result of DNS request
-func logFinish(upsAddr string, n network, err error) {
+// logFinish logs the end of DNS request resolution.  It should be called right
+// after receiving the response from the upstream or the failing action.  n is
+// the [network] that was used to send the request.
+func logFinish(addr string, n network, err error) {
+	logRoutine := log.Debug
+
 	status := "ok"
 	if err != nil {
 		status = err.Error()
+		if isTimeout(err) {
+			// Notify user about the timeout.
+			logRoutine = log.Error
+		}
 	}
 
-	log.Debug("dnsproxy: %s: response received over %s: %q", upsAddr, n, status)
+	logRoutine("dnsproxy: %s: response received over %s: %q", addr, n, status)
 }
 
-// DialerInitializer returns the handler that it creates.  All the subsequent
-// calls to it, except the first one, will return the same handler so that
-// resolving will be performed only once.
+// isTimeout returns true if err is a timeout error.
+//
+// TODO(e.burkov):  Move to golibs.
+func isTimeout(err error) (ok bool) {
+	var netErr net.Error
+	switch {
+	case
+		errors.Is(err, context.Canceled),
+		errors.Is(err, context.DeadlineExceeded),
+		errors.Is(err, os.ErrDeadlineExceeded):
+		return true
+	case errors.As(err, &netErr):
+		return netErr.Timeout()
+	default:
+		return false
+	}
+}
+
+// DialerInitializer returns the handler that it creates.
 type DialerInitializer func() (handler bootstrap.DialHandler, err error)
-
-// closeFunc is the signature of a function that closes an upstream.
-type closeFunc func() (err error)
-
-// nopClose is the [closeFunc] that does nothing.
-func nopClose() (err error) { return nil }
 
 // newDialerInitializer creates an initializer of the dialer that will dial the
 // addresses resolved from u using opts.
-//
-// TODO(e.burkov):  Returning closeFunc is a temporary solution.  It's needed
-// to close the bootstrap upstreams, which may require closing.  It should be
-// gone when the [Options.Bootstrap] will be turned into [Resolver] and it's
-// closing will be handled by the caller.
-func newDialerInitializer(
-	u *url.URL,
-	opts *Options,
-) (di DialerInitializer, closeBoot closeFunc, err error) {
-	host, port, err := netutil.SplitHostPort(u.Host)
-	if err != nil {
-		return nil, nopClose, fmt.Errorf("invalid address: %s: %w", u.Host, err)
-	}
-
-	if addrsLen := len(opts.ServerIPAddrs); addrsLen > 0 {
-		// Don't resolve the addresses of the server since those from the
-		// options should be used.
-		addrs := make([]string, 0, addrsLen)
-		for _, addr := range opts.ServerIPAddrs {
-			addrs = append(addrs, netutil.JoinHostPort(addr.String(), port))
-		}
-
-		handler := bootstrap.NewDialContext(opts.Timeout, addrs...)
-
-		return func() (h bootstrap.DialHandler, err error) { return handler, nil }, nopClose, nil
-	} else if _, err = netip.ParseAddr(host); err == nil {
+func newDialerInitializer(u *url.URL, opts *Options) (di DialerInitializer) {
+	if _, err := netip.ParseAddrPort(u.Host); err == nil {
 		// Don't resolve the address of the server since it's already an IP.
 		handler := bootstrap.NewDialContext(opts.Timeout, u.Host)
 
-		return func() (h bootstrap.DialHandler, err error) { return handler, nil }, nopClose, nil
+		return func() (h bootstrap.DialHandler, dialerErr error) {
+			return handler, nil
+		}
 	}
 
-	resolvers, closeBoot, err := newResolvers(opts)
-	if err != nil {
-		return nil, nopClose, errors.Join(err, closeBoot())
+	boot := opts.Bootstrap
+	if boot == nil {
+		// Use the default resolver for bootstrapping.
+		boot = net.DefaultResolver
 	}
 
-	var dialHandler atomic.Pointer[bootstrap.DialHandler]
-	di = func() (h bootstrap.DialHandler, resErr error) {
-		// Check if the dial handler has already been created.
-		if hPtr := dialHandler.Load(); hPtr != nil {
-			return *hPtr, nil
-		}
-
-		// TODO(e.burkov):  It may appear that several exchanges will try to
-		// resolve the upstream hostname at the same time.  Currently, the last
-		// successful value will be stored in dialHandler, but ideally we should
-		// resolve only once at a time.
-		h, resolveErr := bootstrap.ResolveDialContext(u, opts.Timeout, resolvers, opts.PreferIPv6)
-		if resolveErr != nil {
-			return nil, fmt.Errorf("creating dial handler: %w", resolveErr)
-		}
-
-		if !dialHandler.CompareAndSwap(nil, &h) {
-			// The dial handler has just been created by another exchange.
-			return *dialHandler.Load(), nil
-		}
-
-		return h, nil
+	return func() (h bootstrap.DialHandler, err error) {
+		return bootstrap.ResolveDialContext(u, opts.Timeout, boot, opts.PreferIPv6)
 	}
-
-	return di, closeBoot, nil
-}
-
-// newResolvers prepares resolvers for bootstrapping.  If opts.Bootstrap is
-// empty, the only new [net.Resolver] will be returned.  Otherwise, the it will
-// be added for each occurrence of an empty string in [Options.Bootstrap].
-func newResolvers(opts *Options) (resolvers []Resolver, closeBoot closeFunc, err error) {
-	bootstraps := opts.Bootstrap
-	l := len(bootstraps)
-	if l == 0 {
-		return []Resolver{&net.Resolver{}}, nopClose, nil
-	}
-
-	resolvers, closeBoots := make([]Resolver, 0, l), make([]closeFunc, 0, l)
-	for i, boot := range bootstraps {
-		if boot == "" {
-			resolvers = append(resolvers, &net.Resolver{})
-
-			continue
-		}
-
-		r, rErr := NewUpstreamResolver(boot, opts)
-		if rErr != nil {
-			resolvers = nil
-			err = fmt.Errorf("preparing bootstrap resolver at index %d: %w", i, rErr)
-
-			break
-		}
-
-		resolvers = append(resolvers, r)
-		closeBoots = append(closeBoots, r.(upstreamResolver).Close)
-	}
-
-	closeBoots = slices.Clip(closeBoots)
-
-	return resolvers, func() (closeErr error) {
-		var errs []error
-		for _, cb := range closeBoots {
-			errs = append(errs, cb())
-		}
-
-		return errors.Join(errs...)
-	}, err
 }

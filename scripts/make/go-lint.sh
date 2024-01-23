@@ -35,7 +35,7 @@ set -f -u
 go_version="$( "${GO:-go}" version )"
 readonly go_version
 
-go_min_version='go1.20.10'
+go_min_version='go1.20.12'
 go_version_msg="
 warning: your go version (${go_version}) is different from the recommended minimal one (${go_min_version}).
 if you have the version installed, please set the GO environment variable.
@@ -175,24 +175,24 @@ run_linter gocyclo --over 10\
 	./internal/netutil/\
 	./internal/version/\
 	./proxyutil/\
+	./upstream/\
 	;
 
 run_linter gocyclo --over 20 ./main.go
 run_linter gocyclo --over 18 ./fastip/
 run_linter gocyclo --over 15 ./proxy/
-run_linter gocyclo --over 14 ./upstream/
 
 # TODO(a.garipov): Enable for all.
 run_linter gocognit --over 10\
 	./internal/bootstrap/\
 	./internal/version/\
 	./proxyutil/\
+	./upstream/\
 	;
 
-run_linter gocognit --over 39 ./main.go
-run_linter gocognit --over 33 ./proxy/
-run_linter gocognit --over 32 ./fastip/
-run_linter gocognit --over 24 ./upstream/
+run_linter gocognit --over 35 ./main.go
+run_linter gocognit --over 31 ./proxy/
+run_linter gocognit --over 29 ./fastip/
 run_linter gocognit --over 14 ./internal/netutil/
 
 run_linter ineffassign ./...

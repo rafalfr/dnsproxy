@@ -201,7 +201,7 @@ func TestProxy_Resolve_dnssecCache(t *testing.T) {
 		Signature:   "c29tZSBycnNpZyByZWxhdGVkIHN0dWZm",
 	}
 
-	p := &Proxy{}
+	p := createTestProxy(t, nil)
 	p.UpstreamConfig = &UpstreamConfig{
 		Upstreams: []upstream.Upstream{&testDNSSECUpstream{
 			a:     a,
@@ -309,49 +309,13 @@ func TestProxy_Resolve_dnssecCache(t *testing.T) {
 	}
 }
 
-func TestUpstreamsSort(t *testing.T) {
-	testProxy := createTestProxy(t, nil)
-	upstreams := []upstream.Upstream{}
-
-	// there are 4 upstreams in configuration
-	config := []string{"1.2.3.4", "1.1.1.1", "2.3.4.5", "8.8.8.8"}
-	for _, u := range config {
-		up, err := upstream.AddressToUpstream(u, &upstream.Options{Timeout: 1 * time.Second})
-		if err != nil {
-			t.Fatalf("Failed to create %s upstream: %s", u, err)
-		}
-		upstreams = append(upstreams, up)
-	}
-
-	upstreamRTTStats := map[string]int{}
-	upstreamRTTStats["1.1.1.1:53"] = 10
-	upstreamRTTStats["2.3.4.5:53"] = 20
-	upstreamRTTStats["1.2.3.4:53"] = 30
-	testProxy.upstreamRTTStats = upstreamRTTStats
-
-	sortedUpstreams := testProxy.getSortedUpstreams(upstreams)
-
-	// upstream without rtt stats means `zero rtt`; this upstream should be the first one after sorting
-	if sortedUpstreams[0].Address() != "8.8.8.8:53" {
-		t.Fatalf("wrong sort algorithm!")
-	}
-
-	// upstreams with rtt stats should be sorted from fast to slow
-	if sortedUpstreams[1].Address() != "1.1.1.1:53" {
-		t.Fatalf("wrong sort algorithm!")
-	}
-
-	if sortedUpstreams[2].Address() != "2.3.4.5:53" {
-		t.Fatalf("wrong sort algorithm!")
-	}
-
-	if sortedUpstreams[3].Address() != "1.2.3.4:53" {
-		t.Fatalf("wrong sort algorithm!")
-	}
-}
-
 func TestExchangeWithReservedDomains(t *testing.T) {
 	dnsProxy := createTestProxy(t, nil)
+
+	googleRslv, err := upstream.NewUpstreamResolver("8.8.8.8", &upstream.Options{
+		Timeout: 1 * time.Second,
+	})
+	require.NoError(t, err)
 
 	// Upstreams specification. Domains adguard.com and google.ru reserved
 	// with fake upstreams, maps.google.ru excluded from dnsmasq.
@@ -365,7 +329,7 @@ func TestExchangeWithReservedDomains(t *testing.T) {
 		upstreams,
 		&upstream.Options{
 			InsecureSkipVerify: false,
-			Bootstrap:          []string{"8.8.8.8"},
+			Bootstrap:          upstream.NewCachingResolver(googleRslv),
 			Timeout:            1 * time.Second,
 		},
 	)
@@ -435,6 +399,11 @@ func TestOneByOneUpstreamsExchange(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	googleRslv, err := upstream.NewUpstreamResolver("8.8.8.8:53", &upstream.Options{
+		Timeout: timeOut,
+	})
+	require.NoError(t, err)
+
 	// add one valid and two invalid upstreams
 	upstreams := []string{"https://fake-dns.com/fake-dns-query", "tls://fake-dns.com", "1.1.1.1"}
 	dnsProxy.UpstreamConfig.Upstreams = []upstream.Upstream{}
@@ -443,7 +412,7 @@ func TestOneByOneUpstreamsExchange(t *testing.T) {
 		u, err = upstream.AddressToUpstream(
 			line,
 			&upstream.Options{
-				Bootstrap: []string{"8.8.8.8:53"},
+				Bootstrap: upstream.NewCachingResolver(googleRslv),
 				Timeout:   timeOut,
 			},
 		)
@@ -624,11 +593,16 @@ func TestFallbackFromInvalidBootstrap(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	invalidRslv, err := upstream.NewUpstreamResolver("8.8.8.8:555", &upstream.Options{
+		Timeout: 1 * time.Second,
+	})
+	require.NoError(t, err)
+
 	// Using a DoT server with invalid bootstrap.
 	u, _ := upstream.AddressToUpstream(
 		"tls://dns.adguard.com",
 		&upstream.Options{
-			Bootstrap: []string{"8.8.8.8:555"},
+			Bootstrap: invalidRslv,
 			Timeout:   timeout,
 		},
 	)
@@ -771,38 +745,25 @@ func TestNoQuestion(t *testing.T) {
 	assert.Equal(t, dns.RcodeServerFailure, r.Rcode)
 }
 
-// funcUpstream is a mock upstream implementation to simplify testing.  It
+// fakeUpstream is a mock upstream implementation to simplify testing.  It
 // allows assigning custom Exchange and Address methods.
-type funcUpstream struct {
-	exchangeFunc func(m *dns.Msg) (resp *dns.Msg, err error)
-	addressFunc  func() (addr string)
+type fakeUpstream struct {
+	onExchange func(m *dns.Msg) (resp *dns.Msg, err error)
+	onAddress  func() (addr string)
+	onClose    func() (err error)
 }
 
 // type check
-var _ upstream.Upstream = (*funcUpstream)(nil)
+var _ upstream.Upstream = (*fakeUpstream)(nil)
 
 // Exchange implements upstream.Upstream interface for *funcUpstream.
-func (wu *funcUpstream) Exchange(m *dns.Msg) (*dns.Msg, error) {
-	if wu.exchangeFunc == nil {
-		return nil, nil
-	}
-
-	return wu.exchangeFunc(m)
-}
+func (u *fakeUpstream) Exchange(m *dns.Msg) (resp *dns.Msg, err error) { return u.onExchange(m) }
 
 // Address implements upstream.Upstream interface for *funcUpstream.
-func (wu *funcUpstream) Address() (addr string) {
-	if wu.addressFunc == nil {
-		return "stub"
-	}
-
-	return wu.addressFunc()
-}
+func (u *fakeUpstream) Address() (addr string) { return u.onAddress() }
 
 // Close implements upstream.Upstream interface for *funcUpstream.
-func (wu *funcUpstream) Close() (err error) {
-	return nil
-}
+func (u *fakeUpstream) Close() (err error) { return u.onClose() }
 
 func TestProxy_ReplyFromUpstream_badResponse(t *testing.T) {
 	dnsProxy := createTestProxy(t, nil)
@@ -826,16 +787,21 @@ func TestProxy_ReplyFromUpstream_badResponse(t *testing.T) {
 
 		return resp, nil
 	}
-	u := &funcUpstream{
-		exchangeFunc: exchangeFunc,
+	u := &fakeUpstream{
+		onExchange: exchangeFunc,
+		onAddress:  func() (addr string) { return "stub" },
+		onClose:    func() error { panic("not implemented") },
 	}
 
 	d := &DNSContext{
-		CustomUpstreamConfig: &UpstreamConfig{Upstreams: []upstream.Upstream{u}},
-		Req:                  createHostTestMessage("host"),
-		Addr: &net.TCPAddr{
-			IP: net.IP{1, 2, 3, 0},
-		},
+		CustomUpstreamConfig: NewCustomUpstreamConfig(
+			&UpstreamConfig{Upstreams: []upstream.Upstream{u}},
+			false,
+			0,
+			false,
+		),
+		Req:  createHostTestMessage("host"),
+		Addr: netip.MustParseAddrPort("1.2.3.0:1234"),
 	}
 
 	var err error
@@ -854,7 +820,7 @@ func TestExchangeCustomUpstreamConfig(t *testing.T) {
 	testutil.CleanupAndRequireSuccess(t, prx.Stop)
 
 	ansIP := net.IP{4, 3, 2, 1}
-	u := testUpstream{
+	u := &testUpstream{
 		ans: []dns.RR{&dns.A{
 			Hdr: dns.RR_Header{
 				Rrtype: dns.TypeA,
@@ -866,14 +832,88 @@ func TestExchangeCustomUpstreamConfig(t *testing.T) {
 	}
 
 	d := DNSContext{
-		CustomUpstreamConfig: &UpstreamConfig{Upstreams: []upstream.Upstream{&u}},
-		Req:                  createHostTestMessage("host"),
-		Addr:                 &net.TCPAddr{IP: net.IP{1, 2, 3, 0}},
+		CustomUpstreamConfig: NewCustomUpstreamConfig(
+			&UpstreamConfig{Upstreams: []upstream.Upstream{u}},
+			false,
+			0,
+			false,
+		),
+		Req:  createHostTestMessage("host"),
+		Addr: netip.MustParseAddrPort("1.2.3.0:1234"),
 	}
 
 	err = prx.Resolve(&d)
 	require.NoError(t, err)
 
+	assert.Equal(t, ansIP, getIPFromResponse(d.Res))
+}
+
+func TestExchangeCustomUpstreamConfigCache(t *testing.T) {
+	prx := createTestProxy(t, nil)
+	prx.CacheEnabled = true
+	prx.initCache()
+
+	err := prx.Start()
+	require.NoError(t, err)
+	testutil.CleanupAndRequireSuccess(t, prx.Stop)
+
+	var count int
+
+	ansIP := net.IP{4, 3, 2, 1}
+	exchangeFunc := func(m *dns.Msg) (resp *dns.Msg, err error) {
+		resp = &dns.Msg{}
+		resp.SetReply(m)
+		resp.Answer = append(resp.Answer, &dns.A{
+			Hdr: dns.RR_Header{
+				Name:   m.Question[0].Name,
+				Class:  dns.ClassINET,
+				Rrtype: dns.TypeA,
+				Ttl:    defaultTestTTL,
+			},
+			A: ansIP,
+		})
+
+		count++
+
+		return resp, nil
+	}
+	u := &fakeUpstream{
+		onExchange: exchangeFunc,
+		onAddress:  func() (addr string) { return "stub" },
+		onClose:    func() error { panic("not implemented") },
+	}
+
+	customUpstreamConfig := NewCustomUpstreamConfig(
+		&UpstreamConfig{Upstreams: []upstream.Upstream{u}},
+		true,
+		defaultCacheSize,
+		prx.EnableEDNSClientSubnet,
+	)
+
+	d := DNSContext{
+		CustomUpstreamConfig: customUpstreamConfig,
+		Req:                  createHostTestMessage("host"),
+		Addr:                 netip.MustParseAddrPort("1.2.3.0:1234"),
+	}
+
+	err = prx.Resolve(&d)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, count)
+	assert.Equal(t, ansIP, getIPFromResponse(d.Res))
+
+	err = prx.Resolve(&d)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, count)
+	assert.Equal(t, ansIP, getIPFromResponse(d.Res))
+
+	customUpstreamConfig.ClearCache()
+
+	err = prx.Resolve(&d)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, count)
 	assert.Equal(t, ansIP, getIPFromResponse(d.Res))
 }
 
@@ -944,7 +984,7 @@ func TestECSProxy(t *testing.T) {
 	t.Run("cache_subnet", func(t *testing.T) {
 		d := DNSContext{
 			Req:  createHostTestMessage("host"),
-			Addr: &net.TCPAddr{IP: ip1230},
+			Addr: netip.MustParseAddrPort("1.2.3.0:1234"),
 		}
 
 		err = prx.Resolve(&d)
@@ -957,7 +997,7 @@ func TestECSProxy(t *testing.T) {
 	t.Run("serve_subnet_cache", func(t *testing.T) {
 		d := DNSContext{
 			Req:  createHostTestMessage("host"),
-			Addr: &net.TCPAddr{IP: net.IP{1, 2, 3, 1}},
+			Addr: netip.MustParseAddrPort("1.2.3.1:1234"),
 		}
 		u.ans, u.ecsIP, u.ecsReqIP = nil, nil, nil
 
@@ -971,7 +1011,7 @@ func TestECSProxy(t *testing.T) {
 	t.Run("another_subnet", func(t *testing.T) {
 		d := DNSContext{
 			Req:  createHostTestMessage("host"),
-			Addr: &net.TCPAddr{IP: ip2230},
+			Addr: netip.MustParseAddrPort("2.2.3.0:1234"),
 		}
 		u.ans = []dns.RR{&dns.A{
 			Hdr: dns.RR_Header{Rrtype: dns.TypeA, Name: "host.", Ttl: 60},
@@ -989,7 +1029,7 @@ func TestECSProxy(t *testing.T) {
 	t.Run("cache_general", func(t *testing.T) {
 		d := DNSContext{
 			Req:  createHostTestMessage("host"),
-			Addr: &net.TCPAddr{IP: net.IP{127, 0, 0, 1}},
+			Addr: netip.MustParseAddrPort("127.0.0.1:1234"),
 		}
 		u.ans = []dns.RR{&dns.A{
 			Hdr: dns.RR_Header{Rrtype: dns.TypeA, Name: "host.", Ttl: 60},
@@ -1007,7 +1047,7 @@ func TestECSProxy(t *testing.T) {
 	t.Run("serve_general_cache", func(t *testing.T) {
 		d := DNSContext{
 			Req:  createHostTestMessage("host"),
-			Addr: &net.TCPAddr{IP: net.IP{127, 0, 0, 2}},
+			Addr: netip.MustParseAddrPort("127.0.0.2:1234"),
 		}
 		u.ans, u.ecsIP, u.ecsReqIP = nil, nil, nil
 
@@ -1046,7 +1086,7 @@ func TestECSProxyCacheMinMaxTTL(t *testing.T) {
 	// first request
 	d := DNSContext{
 		Req:  createHostTestMessage("host"),
-		Addr: &net.TCPAddr{IP: clientIP},
+		Addr: netip.MustParseAddrPort("1.2.3.0:1234"),
 	}
 	err = prx.Resolve(&d)
 	require.NoError(t, err)
@@ -1064,9 +1104,7 @@ func TestECSProxyCacheMinMaxTTL(t *testing.T) {
 	// 2nd request
 	clientIP = net.IP{1, 2, 4, 0}
 	d.Req = createHostTestMessage("host")
-	d.Addr = &net.TCPAddr{
-		IP: clientIP,
-	}
+	d.Addr = netip.MustParseAddrPort("1.2.4.0:1234")
 	u.ans = []dns.RR{&dns.A{
 		Hdr: dns.RR_Header{
 			Rrtype: dns.TypeA,
@@ -1124,10 +1162,12 @@ func getFreePort() uint {
 	return port
 }
 
-func createTestProxy(t *testing.T, tlsConfig *tls.Config) *Proxy {
+func createTestProxy(t *testing.T, tlsConfig *tls.Config) (p *Proxy) {
 	t.Helper()
 
-	p := Proxy{}
+	p = &Proxy{
+		time: realClock{},
+	}
 
 	if ip := net.ParseIP(listenIP); tlsConfig != nil {
 		p.TLSListenAddr = []*net.TCPAddr{{IP: ip, Port: 0}}
@@ -1148,12 +1188,15 @@ func createTestProxy(t *testing.T, tlsConfig *tls.Config) *Proxy {
 	p.UpstreamConfig = &UpstreamConfig{}
 	p.UpstreamConfig.Upstreams = append(upstreams, dnsUpstream)
 
-	p.TrustedProxies = []string{"0.0.0.0/0", "::0/0"}
+	p.TrustedProxies = netutil.SliceSubnetSet{
+		netip.MustParsePrefix("0.0.0.0/0"),
+		netip.MustParsePrefix("::0/0"),
+	}
 
-	p.RatelimitSubnetMaskIPv4 = net.CIDRMask(24, 32)
-	p.RatelimitSubnetMaskIPv6 = net.CIDRMask(64, 128)
+	p.RatelimitSubnetLenIPv4 = 24
+	p.RatelimitSubnetLenIPv6 = 64
 
-	return &p
+	return p
 }
 
 func sendTestMessageAsync(t *testing.T, conn *dns.Conn, g *sync.WaitGroup) {

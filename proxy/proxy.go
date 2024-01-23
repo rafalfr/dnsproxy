@@ -23,9 +23,14 @@ import (
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
+	"github.com/AdguardTeam/golibs/syncutil"
+	"github.com/ameshkov/dnscrypt/v2"
 	"github.com/miekg/dns"
 	gocache "github.com/patrickmn/go-cache"
+	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
+	"golang.org/x/exp/rand"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -57,7 +62,8 @@ const (
 	UnqualifiedNames = "unqualified_names"
 )
 
-// Proxy combines the proxy server state and configuration
+// Proxy combines the proxy server state and configuration.  It must not be used
+// until initialized with [Proxy.Init].
 //
 // TODO(a.garipov): Consider extracting conf blocks for better fieldalignment.
 type Proxy struct {
@@ -110,9 +116,10 @@ type Proxy struct {
 	// Upstream
 	// --
 
-	// upstreamRTTStats is a map of upstream addresses and their rtt.  Used to
-	// sort upstreams by their latency.
-	upstreamRTTStats map[string]int
+	// upstreamRTTStats maps the upstream address to its round-trip time
+	// statistics.  It's holds the statistics for all upstreams to perform a
+	// weighted random selection when using the load balancing mode.
+	upstreamRTTStats map[string]upstreamRTTStats
 
 	// rttLock protects upstreamRTTStats.
 	rttLock sync.Mutex
@@ -134,13 +141,12 @@ type Proxy struct {
 	// ratelimitLock protects ratelimitBuckets.
 	ratelimitLock sync.Mutex
 
-	// proxyVerifier checks if the proxy is in the trusted list.
-	proxyVerifier netutil.SubnetSet
-
 	// DNS cache
 	// --
 
 	// cache is used to cache requests.  It is disabled if nil.
+	//
+	// TODO(d.kolyshev): Move this cache to [Proxy.UpstreamConfig] field.
 	cache *cache
 
 	// shortFlighter is used to resolve the expired cached requests without
@@ -165,7 +171,7 @@ type Proxy struct {
 	// RWMutex protects the whole proxy.
 	sync.RWMutex
 
-	// requestGoroutinesSema limits the number of simultaneous requests.
+	// requestsSema limits the number of simultaneous requests.
 	//
 	// TODO(a.garipov): Currently we have to pass this exact semaphore to
 	// the workers, to prevent races on restart.  In the future we will need
@@ -173,7 +179,13 @@ type Proxy struct {
 	// states.
 	//
 	// See also: https://github.com/AdguardTeam/AdGuardHome/issues/2242.
-	requestGoroutinesSema semaphore
+	requestsSema syncutil.Semaphore
+
+	// time provides the current time.
+	time clock
+
+	// randSrc provides the source of randomness.
+	randSrc rand.Source
 
 	// Config is the proxy configuration.
 	//
@@ -183,6 +195,7 @@ type Proxy struct {
 
 // Init populates fields of p but does not start listeners.
 func (p *Proxy) Init() (err error) {
+	// TODO(s.chzhen):  Consider moving to [Proxy.validateConfig].
 	err = p.validateBasicAuth()
 	if err != nil {
 		return fmt.Errorf("basic auth: %w", err)
@@ -193,12 +206,9 @@ func (p *Proxy) Init() (err error) {
 	if p.MaxGoroutines > 0 {
 		//log.Info("dnsproxy: max goroutines is set to %d", p.MaxGoroutines)
 
-		p.requestGoroutinesSema, err = newChanSemaphore(p.MaxGoroutines)
-		if err != nil {
-			return fmt.Errorf("can't init semaphore: %w", err)
-		}
+		p.requestsSema = syncutil.NewChanSemaphore(p.MaxGoroutines)
 	} else {
-		p.requestGoroutinesSema = newNoopSemaphore()
+		p.requestsSema = syncutil.EmptySemaphore{}
 	}
 
 	p.udpOOBSize = proxynetutil.UDPGetOOBSize()
@@ -220,18 +230,15 @@ func (p *Proxy) Init() (err error) {
 		}
 	}
 
-	var trusted []*net.IPNet
-	trusted, err = netutil.ParseSubnets(p.TrustedProxies...)
-	if err != nil {
-		return fmt.Errorf("initializing subnet detector for proxies verifying: %w", err)
-	}
-
-	p.proxyVerifier = netutil.SliceSubnetSet(trusted)
-
 	err = p.setupDNS64()
 	if err != nil {
 		return fmt.Errorf("setting up DNS64: %w", err)
 	}
+
+	p.RatelimitWhitelist = slices.Clone(p.RatelimitWhitelist)
+	slices.SortFunc(p.RatelimitWhitelist, netip.Addr.Compare)
+
+	p.time = realClock{}
 
 	return nil
 }
@@ -286,14 +293,14 @@ func (p *Proxy) Start() (err error) {
 
 // closeAll closes all closers and appends the occurred errors to errs.
 func closeAll[C io.Closer](errs []error, closers ...C) (appended []error) {
-    for _, c := range closers {
-        err := c.Close()
-        if err != nil {
-            errs = append(errs, err)
-        }
-    }
-    
-    return errs
+	for _, c := range closers {
+		err := c.Close()
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errs
 }
 
 // Stop stops the proxy server including all its listeners
@@ -496,7 +503,7 @@ func (p *Proxy) selectUpstreams(d *DNSContext) (upstreams []upstream.Upstream) {
 
 		if custom := d.CustomUpstreamConfig; custom != nil {
 			// Try to use custom.
-			upstreams = getUpstreams(custom, host)
+			upstreams = getUpstreams(custom.upstream, host)
 			if len(upstreams) > 0 {
 				return upstreams
 			}
@@ -520,10 +527,9 @@ func (p *Proxy) selectUpstreams(d *DNSContext) (upstreams []upstream.Upstream) {
 		return nil
 	}
 
-	ip, _ := netutil.IPAndPortFromAddr(d.Addr)
 	// TODO(e.burkov):  Detect against the actual configured subnet set.
 	// Perhaps, even much earlier.
-	if !netutil.IsLocallyServed(ip) {
+	if !netutil.IsLocallyServed(d.Addr.Addr()) {
 		return nil
 	}
 
@@ -535,25 +541,21 @@ func (p *Proxy) replyFromUpstream(d *DNSContext) (ok bool, err error) {
 	req := d.Req
 
 	upstreams := p.selectUpstreams(d)
-
 	if len(upstreams) == 0 {
 		return false, fmt.Errorf("selecting general upstream: %w", upstream.ErrNoUpstreams)
 	}
 
 	start := time.Now()
 	//src := "upstream"
-	//start := time.Now()
 
 	// Perform the DNS request.
-	resp, u, err := p.exchange(req, upstreams)
+	resp, u, err := p.exchangeUpstreams(req, upstreams)
 	if dns64Ups := p.performDNS64(req, resp, upstreams); dns64Ups != nil {
 		u = dns64Ups
 	} else if p.isBogusNXDomain(resp) {
 		//log.Debug("proxy: replying from upstream: response contains bogus-nxdomain ip")
 		resp = p.genWithRCode(req, dns.RcodeNameError)
 	}
-
-	//log.Debug("proxy: replying from upstream: rtt is %s", time.Since(start))
 
 	if err != nil && p.Fallbacks != nil {
 		//log.Debug("proxy: replying from upstream: using fallback due to %s", err)
@@ -632,7 +634,6 @@ const defaultUDPBufSize = 2048
 // Resolve is the default resolving method used by the DNS proxy to query
 // upstream servers.
 func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
-
 	if p.EnableEDNSClientSubnet {
 		dctx.processECS(p.EDNSAddr)
 	}
@@ -718,7 +719,8 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 			addDO(dctx.Req)
 		}
 
-		ok, err = p.replyFromUpstream(dctx)
+	var ok bool
+	ok, err = p.replyFromUpstream(dctx)
 
 		// Don't cache the responses having CD flag, just like Dnsmasq does.  It
 		// prevents the cache from being poisoned with unvalidated answers which may
@@ -727,6 +729,7 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 		// See https://github.com/imp/dnsmasq/blob/770bce967cfc9967273d0acfb3ea018fb7b17522/src/forward.c#L1169-L1172.
 		//
 
+		// TODO (rafalfr)
 		if cacheWorks && ok && !dctx.Res.CheckingDisabled {
 			ok, queryDomain = Efcm.checkDomain(queryDomain)
 			if !ok {
@@ -759,9 +762,12 @@ func (p *Proxy) cacheWorks(dctx *DNSContext) (ok bool) {
 	switch {
 	case p.cache == nil:
 		reason = "disabled"
-	case dctx.CustomUpstreamConfig != nil:
+	case dctx.CustomUpstreamConfig != nil && dctx.CustomUpstreamConfig.cache == nil:
+		// In case of custom upstream cache is not configured, the global proxy
+		// cache cannot be used because different upstreams can return different
+		// results.
 		// See https://github.com/AdguardTeam/dnsproxy/issues/169.
-		reason = "custom upstreams used"
+		reason = "custom upstreams cache is not configured"
 	case dctx.Req.CheckingDisabled:
 		reason = "dnssec check disabled"
 	default:
@@ -785,15 +791,15 @@ func (dctx *DNSContext) processECS(cliIP net.IP) {
 		}
 	}
 
-	// Set ECS.
+	var cliAddr netip.Addr
 	if cliIP == nil {
-		cliIP, _ = netutil.IPAndPortFromAddr(dctx.Addr)
-		if cliIP == nil {
-			return
-		}
+		cliAddr = dctx.Addr.Addr()
+		cliIP = cliAddr.AsSlice()
+	} else {
+		cliAddr, _ = netip.AddrFromSlice(cliIP)
 	}
 
-	if !netutil.IsSpecialPurpose(cliIP) {
+	if !netutil.IsSpecialPurpose(cliAddr) {
 		// A Stub Resolver MUST set SCOPE PREFIX-LENGTH to 0.  See RFC 7871
 		// Section 6.
 		dctx.ReqECS = setECS(dctx.Req, cliIP, 0)

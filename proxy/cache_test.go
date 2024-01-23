@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"net"
+	"net/netip"
 	"strings"
 	"sync"
 	"testing"
@@ -21,9 +22,10 @@ const testCacheSize = 4096
 
 const testUpsAddr = "https://upstream.address"
 
-var upstreamWithAddr = &funcUpstream{
-	exchangeFunc: func(m *dns.Msg) (resp *dns.Msg, err error) { panic("not implemented") },
-	addressFunc:  func() (addr string) { return testUpsAddr },
+var upstreamWithAddr = &fakeUpstream{
+	onExchange: func(m *dns.Msg) (resp *dns.Msg, err error) { panic("not implemented") },
+	onClose:    func() (err error) { panic("not implemented") },
+	onAddress:  func() (addr string) { return testUpsAddr },
 }
 
 func TestServeCached(t *testing.T) {
@@ -324,7 +326,7 @@ func TestCacheExpirationWithTTLOverride(t *testing.T) {
 
 	t.Run("replace_min", func(t *testing.T) {
 		d.Req = createHostTestMessage("host")
-		d.Addr = &net.TCPAddr{}
+		d.Addr = netip.AddrPort{}
 
 		u.ans = []dns.RR{&dns.A{
 			Hdr: dns.RR_Header{
@@ -348,7 +350,7 @@ func TestCacheExpirationWithTTLOverride(t *testing.T) {
 
 	t.Run("replace_max", func(t *testing.T) {
 		d.Req = createHostTestMessage("host2")
-		d.Addr = &net.TCPAddr{}
+		d.Addr = netip.AddrPort{}
 
 		u.ans = []dns.RR{&dns.A{
 			Hdr: dns.RR_Header{
