@@ -24,10 +24,8 @@ import (
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/syncutil"
-	"github.com/ameshkov/dnscrypt/v2"
 	"github.com/miekg/dns"
 	gocache "github.com/patrickmn/go-cache"
-	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/exp/rand"
 	"golang.org/x/exp/slices"
@@ -649,7 +647,6 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 	//	}
 	//}
 
-	var ok bool
 	replyFromUpstream := true
 	var queryDomain string
 	// rafalfr code
@@ -719,8 +716,8 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 			addDO(dctx.Req)
 		}
 
-	var ok bool
-	ok, err = p.replyFromUpstream(dctx)
+		var ok bool
+		ok, err = p.replyFromUpstream(dctx)
 
 		// Don't cache the responses having CD flag, just like Dnsmasq does.  It
 		// prevents the cache from being poisoned with unvalidated answers which may

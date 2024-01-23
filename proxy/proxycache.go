@@ -35,13 +35,13 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 
 	if !p.Config.EnableEDNSClientSubnet {
 		ci, expired, key = dctxCache.get(d.Req)
-		hitMsg = "serving cached response"
+		//hitMsg = "serving cached response"
 	} else if d.ReqECS != nil {
 		ci, expired, key = dctxCache.getWithSubnet(d.Req, d.ReqECS)
-		hitMsg = "serving response from subnet cache"
+		//hitMsg = "serving response from subnet cache"
 	} else {
 		ci, expired, key = dctxCache.get(d.Req)
-		hitMsg = "serving response from general cache"
+		//hitMsg = "serving response from general cache"
 	}
 
 	if hit = ci != nil; !hit {
@@ -51,7 +51,7 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 	d.Res = ci.m
 	d.CachedUpstreamAddr = ci.u
 
-	log.Debug("dnsproxy: cache: %s", hitMsg)
+	//log.Debug("dnsproxy: cache: %s", hitMsg)
 
 	if dctxCache.optimistic && expired {
 		// Build a reduced clone of the current context to avoid data race.

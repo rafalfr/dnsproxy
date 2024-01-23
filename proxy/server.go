@@ -13,7 +13,6 @@ import (
 
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/miekg/dns"
-	"github.com/quic-go/quic-go"
 )
 
 // TODO (rafalfr): nothing to do
@@ -95,6 +94,10 @@ func (p *Proxy) startListeners(ctx context.Context) error {
 
 // handleDNSRequest processes the incoming packet bytes and returns with an optional response packet.
 func (p *Proxy) handleDNSRequest(d *DNSContext) error {
+	// rafalfr code
+	p.mylogDNSMessage(d, "req")
+	// end rafalfr code
+
 	p.logDNSMessage(d.Req)
 
 	if d.Req.Response {
@@ -152,6 +155,9 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 		}
 	}
 
+	// rafalfr code
+	p.mylogDNSMessage(d, "res")
+	// end rafalfr code
 	p.logDNSMessage(d.Res)
 	p.respond(d)
 
@@ -227,8 +233,22 @@ func (p *Proxy) logDNSMessage(m *dns.Msg) {
 	if m == nil {
 		return
 	}
+}
 
-	// rafalfr code
+// rafalfr code
+func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
+	var m *dns.Msg
+	if messageType == "req" {
+		m = d.Req
+	}
+	if messageType == "res" {
+		m = d.Res
+	}
+
+	if m == nil {
+		return
+	}
+
 	if m.Response {
 		if len(m.Answer) > 0 {
 			numAnswers.Add(1)

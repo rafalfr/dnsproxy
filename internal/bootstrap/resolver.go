@@ -2,13 +2,11 @@ package bootstrap
 
 import (
 	"context"
-	"net"
-	"net/netip"
-	"time"
-
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"golang.org/x/exp/slices"
+	"net"
+	"net/netip"
 )
 
 // Resolver resolves the hostnames to IP addresses.  Note, that [net.Resolver]
@@ -84,9 +82,9 @@ func lookupAsync(ctx context.Context, r Resolver, network, host string, resCh ch
 // TODO(e.burkov):  Get rid of this function?  It only wraps the actual lookup
 // with dubious logging.
 func lookup(ctx context.Context, r Resolver, network, host string) (addrs []netip.Addr, err error) {
-	start := time.Now()
+	//start := time.Now()
 	addrs, err = r.LookupNetIP(ctx, network, host)
-	elapsed := time.Since(start)
+	//elapsed := time.Since(start)
 
 	if err != nil {
 		//log.Debug("parallel lookup: lookup for %s failed in %s: %s", host, elapsed, err)

@@ -31,7 +31,6 @@ import (
 	"github.com/AdguardTeam/golibs/timeutil"
 	"github.com/go-co-op/gocron"
 	goFlags "github.com/jessevdk/go-flags"
-	"gopkg.in/yaml.v3"
 )
 
 // Options represents console arguments.  For further additions, please do not
@@ -212,8 +211,7 @@ type Options struct {
 	// Print DNSProxy version (just for the help)
 	Version bool `yaml:"version" long:"version" description:"Prints the program version"`
 
-	// TODO (rafalfr): nothing to do
-
+	// rafalfr code
 	StatsPort int `yaml:"stats_port" long:"stats_port" description:"Port on which to expose statistics." default:"9999"`
 
 	BlockedDomainsLists []string `yaml:"blocked_domains_lists" long:"blocked_domains_lists" description:"The blocked domains list to be used (can be specified multiple times)."`
@@ -221,6 +219,8 @@ type Options struct {
 	DomainsExcludedFromBlockingLists []string `yaml:"domains_excluded_from_blocking" long:"domains_excluded_from_blocking" description:"A list of domains to be excluded from blocking lists (can be specified multiple times)."`
 
 	ExcludedFromCachingLists []string `yaml:"domains_excluded_from_caching" long:"domains_excluded_from_caching" description:"The list of domains to be excluded from caching (can be specified multiple times)."`
+
+	// end rafalfr code
 }
 
 const (
@@ -324,7 +324,7 @@ func run(options *Options) {
 	}
 	_, err = s.Every(1).Minute().Do(func() { proxy.MonitorLogFile(options.LogOutput) })
 	if err != nil {
-		log.Error("Can't start blocked domains updater.")
+		log.Error("Can't start log file monitor.")
 	}
 	_, err = s.Every(1).Hour().Do(func() { proxy.SM.SaveStats("stats.json") })
 	if err != nil {
