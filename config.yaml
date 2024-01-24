@@ -45,7 +45,7 @@ upstream:
   - "tls://kaitain.restena.lu"
   - "tls://dns3.digitalcourage.de"
   - "tls://dns.digitale-gesellschaft.ch"
-  - "https://one.one.one.one"
+  - "https://one.one.one.one/dns-query"
   - "https://doh.dns.sb/dns-query"
   - "https://doh.tiar.app/dns-query"
   - "https://dns.artikel10.org/dns-query"
