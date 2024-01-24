@@ -304,6 +304,7 @@ func run(options *Options) {
 	// rafalfr code
 	proxy.SM.LoadStats("stats.json")
 
+	dnsProxy.PreferIPv6 = false
 	err := dnsProxy.Start()
 	if err != nil {
 		log.Fatalf("cannot start the DNS proxy due to %s", err)
