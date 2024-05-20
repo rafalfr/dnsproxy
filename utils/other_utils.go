@@ -1,6 +1,6 @@
 package utils
 
-// TODO (rafalfr): nothing
+// TODO (rafal): nothing
 
 import (
 	"crypto/rand"

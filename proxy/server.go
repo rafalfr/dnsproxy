@@ -15,7 +15,8 @@ import (
 	"github.com/miekg/dns"
 )
 
-// TODO (rafalfr): nothing to do
+// TODO (rafal): nothing to do
+// ////////////////////////////////////////////////
 // numQueries is used to count the number of queries
 var numQueries atomic.Uint64
 
@@ -24,6 +25,8 @@ var numAnswers atomic.Uint64
 
 // numCacheHits is used to count the number of cache hits
 var numCacheHits atomic.Uint64
+
+////////////////////////////////////////////////////
 
 // startListeners configures and starts listener loops
 func (p *Proxy) startListeners(ctx context.Context) error {
@@ -94,9 +97,9 @@ func (p *Proxy) startListeners(ctx context.Context) error {
 
 // handleDNSRequest processes the incoming packet bytes and returns with an optional response packet.
 func (p *Proxy) handleDNSRequest(d *DNSContext) error {
-	// rafalfr code
+	// rafal
 	p.mylogDNSMessage(d, "req")
-	// end rafalfr code
+	// end rafal
 
 	p.logDNSMessage(d.Req)
 
@@ -108,7 +111,7 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 	if p.BeforeRequestHandler != nil {
 		ok, err := p.BeforeRequestHandler(p, d)
 		if err != nil {
-			//log.Error("Error in the BeforeRequestHandler: %s", err)
+			//log.Error("Error in the BeforeRequestHandler: %s", err)	// rafal
 			d.Res = p.genServerFailure(d.Req)
 			p.respond(d)
 			return nil
@@ -125,7 +128,7 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 	}
 
 	if len(d.Req.Question) != 1 {
-		//log.Debug("got invalid number of questions: %v", len(d.Req.Question))
+		//log.Debug("got invalid number of questions: %v", len(d.Req.Question))	// rafal
 		d.Res = p.genServerFailure(d.Req)
 	}
 
@@ -155,9 +158,9 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 		}
 	}
 
-	// rafalfr code
+	// rafal
 	p.mylogDNSMessage(d, "res")
-	// end rafalfr code
+	// end rafal
 	p.logDNSMessage(d.Res)
 	p.respond(d)
 
@@ -202,7 +205,7 @@ func (p *Proxy) setMinMaxTTL(r *dns.Msg) {
 		newTTL := respectTTLOverrides(originalTTL, p.CacheMinTTL, p.CacheMaxTTL)
 
 		if originalTTL != newTTL {
-			//log.Debug("Override TTL from %d to %d", originalTTL, newTTL)
+			//log.Debug("Override TTL from %d to %d", originalTTL, newTTL)	// rafal
 			rr.Header().Ttl = newTTL
 		}
 	}
@@ -235,7 +238,8 @@ func (p *Proxy) logDNSMessage(m *dns.Msg) {
 	}
 }
 
-// rafalfr code
+// rafal
+// //////////////////////////////////////////////////////////////////////////////
 func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 	var m *dns.Msg
 	if messageType == "req" {
@@ -307,5 +311,6 @@ func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 			}
 		}
 	}
-	// end rafalfr code
+	//////////////////////////////////////////////////////////////////////////////
+	// end rafal code
 }

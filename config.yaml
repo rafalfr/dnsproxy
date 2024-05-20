@@ -55,7 +55,6 @@ upstream:
   - "https://doh.opendns.com/dns-query"
   - "https://sky.rethinkdns.com/1:AAkACAQA"
   - "https://dns.dnswarden.com/uncensored"
-  - "https://doh.cleanbrowsing.org/doh/security-filter/"
   - "[/google.pl/]https://dns.google/dns-query"
   - "[/google.com/]https://dns.google/dns-query"
   - "[/googleusercontent.com/]https://dns.google/dns-query"

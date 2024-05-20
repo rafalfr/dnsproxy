@@ -202,6 +202,7 @@ func (p *Proxy) Init() (err error) {
 	p.initCache()
 
 	if p.MaxGoroutines > 0 {
+		// rafal
 		//log.Info("dnsproxy: max goroutines is set to %d", p.MaxGoroutines)
 
 		p.requestsSema = syncutil.NewChanSemaphore(p.MaxGoroutines)
@@ -220,6 +221,7 @@ func (p *Proxy) Init() (err error) {
 	}
 
 	if p.UpstreamMode == UModeFastestAddr {
+		// rafal
 		//log.Info("dnsproxy: fastest ip is enabled")
 
 		p.fastestAddr = fastip.NewFastestAddr()
@@ -510,11 +512,13 @@ func (p *Proxy) selectUpstreams(d *DNSContext) (upstreams []upstream.Upstream) {
 		// Use configured.
 		upstreams = getUpstreams(p.UpstreamConfig, host)
 
-		// TODO (rafalfr): use random upstream server if flag in configuration set
+		// TODO (rafal): use random upstream server if flag in configuration set
+		//////////////////////////////////////////////////////////////////////////
 		if upstreams != nil && len(upstreams) > 0 {
 			randomIndex, _ := utils.GetRandomValue(0, int64(len(upstreams)))
 			upstreams = upstreams[randomIndex : randomIndex+1]
 		}
+		////////////////////////////////////////////////////////////////////////
 
 		return upstreams
 	}
@@ -544,23 +548,25 @@ func (p *Proxy) replyFromUpstream(d *DNSContext) (ok bool, err error) {
 	}
 
 	start := time.Now()
-	//src := "upstream"
+	//src := "upstream"	// rafal
 
 	// Perform the DNS request.
 	resp, u, err := p.exchangeUpstreams(req, upstreams)
 	if dns64Ups := p.performDNS64(req, resp, upstreams); dns64Ups != nil {
 		u = dns64Ups
 	} else if p.isBogusNXDomain(resp) {
+		// rafal
 		//log.Debug("proxy: replying from upstream: response contains bogus-nxdomain ip")
 		resp = p.genWithRCode(req, dns.RcodeNameError)
 	}
 
 	if err != nil && p.Fallbacks != nil {
+		// rafal
 		//log.Debug("proxy: replying from upstream: using fallback due to %s", err)
 
 		// Reset the timer.
 		start = time.Now()
-		//src = "fallback"
+		//src = "fallback"	// rafal
 
 		upstreams = p.Fallbacks.getUpstreamsForDomain(req.Question[0].Name)
 		if len(upstreams) == 0 {
@@ -571,11 +577,13 @@ func (p *Proxy) replyFromUpstream(d *DNSContext) (ok bool, err error) {
 	}
 
 	if err != nil {
+		// rafal
 		//log.Debug("proxy: replying from %s: %s", src, err)
 	}
 
 	if resp != nil {
 		rtt := time.Since(start)
+		// rafal
 		//log.Debug("proxy: replying from %s: rtt is %s", src, rtt)
 
 		d.QueryDuration = rtt
@@ -597,7 +605,7 @@ func (p *Proxy) handleExchangeResult(d *DNSContext, req, resp *dns.Msg, u upstre
 		return
 	}
 
-	// TODO (rafalfr): print only if configured
+	// TODO (rafal): print only if configured
 	//log.Info("reply from %s for %s", u.Address(), resp.Question[0].Name)
 	d.Upstream = u
 	d.Res = resp
@@ -649,7 +657,8 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 
 	replyFromUpstream := true
 	var queryDomain string
-	// rafalfr code
+	// rafal code
+	////////////////////////////////////////////////////////////////////////////////
 	for _, rr := range dctx.Req.Question {
 
 		if t := rr.Qtype; t == dns.TypeA || t == dns.TypeAAAA {
@@ -695,7 +704,8 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 			}
 		}
 	}
-	// end rafalfr code
+	////////////////////////////////////////////////////////////////////////////////
+	// end rafal code
 
 	if replyFromUpstream {
 		// Use cache only if it's enabled and the query doesn't use custom upstream.
@@ -726,7 +736,8 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 		// See https://github.com/imp/dnsmasq/blob/770bce967cfc9967273d0acfb3ea018fb7b17522/src/forward.c#L1169-L1172.
 		//
 
-		// TODO (rafalfr)
+		// TODO (rafal)
+		////////////////////////////////////////////////////////////////////////////////
 		if cacheWorks && ok && !dctx.Res.CheckingDisabled {
 			ok, queryDomain = Efcm.checkDomain(queryDomain)
 			if !ok {
@@ -734,6 +745,7 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 				p.cacheResp(dctx)
 			}
 		}
+		///////////////////////////////////////////////////////////////////////////////
 	}
 
 	// It is possible that the response is nil if the upstream hasn't been
@@ -782,6 +794,7 @@ func (dctx *DNSContext) processECS(cliIP net.IP) {
 		if ones, _ := ecs.Mask.Size(); ones != 0 {
 			dctx.ReqECS = ecs
 
+			// rafal
 			//log.Debug("dnsproxy: passing through ecs: %s", dctx.ReqECS)
 
 			return
@@ -801,6 +814,7 @@ func (dctx *DNSContext) processECS(cliIP net.IP) {
 		// Section 6.
 		dctx.ReqECS = setECS(dctx.Req, cliIP, 0)
 
+		// rafal
 		//log.Debug("dnsproxy: setting ecs: %s", dctx.ReqECS)
 	}
 }

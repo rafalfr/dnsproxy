@@ -98,11 +98,11 @@ func (p *Proxy) createHTTPSListeners() (err error) {
 //     "application/dns-message";
 //   - http.StatusMethodNotAllowed if request method is not GET or POST.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	//log.Debug("dnsproxy: incoming https request on %s", r.URL)
+	//log.Debug("dnsproxy: incoming https request on %s", r.URL)	// rafal
 
 	raddr, prx, err := remoteAddr(r)
 	if err != nil {
-		//log.Debug("dnsproxy: warning: getting real ip: %s", err)
+		//log.Debug("dnsproxy: warning: getting real ip: %s", err)	// rafal
 	}
 
 	if !p.checkBasicAuth(w, r, raddr) {
@@ -160,10 +160,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	d.HTTPResponseWriter = w
 
 	if prx.IsValid() {
-		//log.Debug("dnsproxy: request came from proxy server %s", prx)
+		//log.Debug("dnsproxy: request came from proxy server %s", prx)	// rafal
 
 		if !p.TrustedProxies.Contains(prx.Addr()) {
-			//log.Debug("dnsproxy: proxy %s is not trusted, using original remote addr", prx)
+			//log.Debug("dnsproxy: proxy %s is not trusted, using original remote addr", prx)	// rafal
 			d.Addr = prx
 		}
 	}

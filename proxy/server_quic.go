@@ -91,9 +91,9 @@ func (p *Proxy) quicPacketLoop(l *quic.EarlyListener, reqSema syncutil.Semaphore
 		conn, err := l.Accept(ctx)
 		if err != nil {
 			if isQUICErrorForDebugLog(err) {
-				//log.Debug("accepting quic conn: closed or timed out: %s", err)
+				//log.Debug("accepting quic conn: closed or timed out: %s", err)	// rafal
 			} else {
-				//log.Error("accepting quic conn: %s", err)
+				//log.Error("accepting quic conn: %s", err)	// rafal
 			}
 
 			break
@@ -129,9 +129,9 @@ func (p *Proxy) handleQUICConnection(conn quic.Connection, reqSema syncutil.Sema
 		stream, err := conn.AcceptStream(ctx)
 		if err != nil {
 			if isQUICErrorForDebugLog(err) {
-				//log.Debug("accepting quic stream: closed or timed out: %s", err)
+				//log.Debug("accepting quic stream: closed or timed out: %s", err)	// rafal
 			} else {
-				//log.Error("accepting quic stream: %s", err)
+				//log.Error("accepting quic stream: %s", err)	// rafal
 			}
 
 			// Close the connection to make sure resources are freed.
@@ -329,9 +329,9 @@ func logShortQUICRead(err error) {
 	}
 
 	if isQUICErrorForDebugLog(err) {
-		//log.Debug("reading from quic stream: closed or timeout: %s", err)
+		//log.Debug("reading from quic stream: closed or timeout: %s", err)	// rafal
 	} else {
-		//log.Error("reading from quic stream: %s", err)
+		//log.Error("reading from quic stream: %s", err)	// rafal
 	}
 }
 
@@ -386,7 +386,7 @@ func closeQUICConn(conn quic.Connection, code quic.ApplicationErrorCode) {
 
 	err := conn.CloseWithError(code, "")
 	if err != nil {
-		//log.Debug("closing quic connection with code %d: %s", code, err)
+		//log.Debug("closing quic connection with code %d: %s", code, err)	// rafal
 	}
 }
 

@@ -1,6 +1,6 @@
 package proxy
 
-// TODO(rafalfr): nothing to do
+// TODO(rafal): nothing to do
 
 import "sync"
 

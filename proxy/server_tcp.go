@@ -69,9 +69,9 @@ func (p *Proxy) tcpPacketLoop(l net.Listener, proto Proto, reqSema syncutil.Sema
 		clientConn, err := l.Accept()
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				//log.Debug("dnsproxy: tcp connection %s closed", l.Addr())
+				//log.Debug("dnsproxy: tcp connection %s closed", l.Addr())	// rafal
 			} else {
-				//log.Error("dnsproxy: reading from tcp: %s", err)
+				//log.Error("dnsproxy: reading from tcp: %s", err)	// rafal
 			}
 
 			break
@@ -97,12 +97,12 @@ func (p *Proxy) tcpPacketLoop(l net.Listener, proto Proto, reqSema syncutil.Sema
 func (p *Proxy) handleTCPConnection(conn net.Conn, proto Proto) {
 	defer log.OnPanic("proxy.handleTCPConnection")
 
-	//log.Debug("dnsproxy: handling new %s request from %s", proto, conn.RemoteAddr())
+	//log.Debug("dnsproxy: handling new %s request from %s", proto, conn.RemoteAddr())	// rafal
 
 	defer func() {
 		err := conn.Close()
 		if err != nil {
-			//logWithNonCrit(err, "dnsproxy: handling tcp: closing conn")
+			//logWithNonCrit(err, "dnsproxy: handling tcp: closing conn")	// rafal
 		}
 	}()
 
@@ -116,7 +116,7 @@ func (p *Proxy) handleTCPConnection(conn net.Conn, proto Proto) {
 		err := conn.SetDeadline(time.Now().Add(defaultTimeout))
 		if err != nil {
 			// Consider deadline errors non-critical.
-			//logWithNonCrit(err, "handling tcp: setting deadline")
+			//logWithNonCrit(err, "handling tcp: setting deadline")	// rafal
 		}
 
 		packet, err := readPrefixed(conn)
@@ -175,9 +175,9 @@ func readPrefixed(conn net.Conn) (b []byte, err error) {
 // err is a critical error or not.
 func logWithNonCrit(err error, msg string) {
 	if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) || isEPIPE(err) {
-		//log.Debug("%s: connection is closed; original error: %s", msg, err)
+		//log.Debug("%s: connection is closed; original error: %s", msg, err)	// rafal
 	} else if netErr := net.Error(nil); errors.As(err, &netErr) && netErr.Timeout() {
-		//log.Debug("%s: connection timed out; original error: %s", msg, err)
+		//log.Debug("%s: connection timed out; original error: %s", msg, err)	// rafal
 	} else {
 		log.Error("%s: %s", msg, err)
 	}

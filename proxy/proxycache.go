@@ -22,26 +22,28 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 	dctxCache := p.cacheForContext(d)
 
 	var ci *cacheItem
-	//var hitMsg string
+	//var hitMsg string	// rafal
 	var expired bool
 	var key []byte
 
-	// rafalfr code
+	// rafal
+	////////////////////////////////////////////////////
 	SM.Set("cache::cache_size", p.cache.items.Stats().Size)
 	SM.Set("cache::cache_count", p.cache.items.Stats().Count)
 	//SM.Set("cache::cache_hits", p.cache.items.Stats().Hit)
 	//SM.Set("cache::cache_misses", p.cache.items.Stats().Miss)
-	// end rafalfr code
+	////////////////////////////////////////////////////
+	// end rafal
 
 	if !p.Config.EnableEDNSClientSubnet {
 		ci, expired, key = dctxCache.get(d.Req)
-		//hitMsg = "serving cached response"
+		//hitMsg = "serving cached response"	// rafal
 	} else if d.ReqECS != nil {
 		ci, expired, key = dctxCache.getWithSubnet(d.Req, d.ReqECS)
-		//hitMsg = "serving response from subnet cache"
+		//hitMsg = "serving response from subnet cache"	// rafal
 	} else {
 		ci, expired, key = dctxCache.get(d.Req)
-		//hitMsg = "serving response from general cache"
+		//hitMsg = "serving response from general cache"	// rafal
 	}
 
 	if hit = ci != nil; !hit {
@@ -51,7 +53,7 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 	d.Res = ci.m
 	d.CachedUpstreamAddr = ci.u
 
-	//log.Debug("dnsproxy: cache: %s", hitMsg)
+	//log.Debug("dnsproxy: cache: %s", hitMsg)	// rafal
 
 	if dctxCache.optimistic && expired {
 		// Build a reduced clone of the current context to avoid data race.

@@ -18,7 +18,7 @@ import (
 )
 
 // defaultCacheSize is the size of cache in bytes by default.
-const defaultCacheSize = 4 * 1024 * 1024
+const defaultCacheSize = 4 * 1024 * 1024 // rafal
 
 // cache is used to cache requests and used upstreams.
 type cache struct {
@@ -450,7 +450,7 @@ const ServFailMaxCacheTTL = 30
 
 // calculateTTL returns the number of seconds for which m could be cached.  It's
 // usually the lowest TTL among all m's resource records.  It returns 0 if m
-// isn't cacheable according to it's contents.
+// isn't cacheable according to its contents.
 func calculateTTL(m *dns.Msg) (ttl uint32) {
 	// Use the maximum value as a guard value.  If the inner loop is entered,
 	// it's going to be rewritten with an actual TTL value that is lower than

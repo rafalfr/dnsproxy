@@ -84,6 +84,7 @@ func exchange(u upstream.Upstream, req *dns.Msg, c clock) (resp *dns.Msg, dur ti
 			err,
 		)
 	} else {
+		// rafal
 		//log.Debug(
 		//	"dnsproxy: upstream %s successfully finished exchange of %s; elapsed %s",
 		//	addr,

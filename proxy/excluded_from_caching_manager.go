@@ -1,6 +1,6 @@
 package proxy
 
-// TODO (rafalfr): nothing
+// TODO (rafal): nothing
 
 import (
 	"github.com/barweiss/go-tuple"

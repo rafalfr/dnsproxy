@@ -82,14 +82,14 @@ func lookupAsync(ctx context.Context, r Resolver, network, host string, resCh ch
 // TODO(e.burkov):  Get rid of this function?  It only wraps the actual lookup
 // with dubious logging.
 func lookup(ctx context.Context, r Resolver, network, host string) (addrs []netip.Addr, err error) {
-	//start := time.Now()
+	//start := time.Now()	// rafal
 	addrs, err = r.LookupNetIP(ctx, network, host)
-	//elapsed := time.Since(start)
+	//elapsed := time.Since(start)	// rafal
 
 	if err != nil {
-		//log.Debug("parallel lookup: lookup for %s failed in %s: %s", host, elapsed, err)
+		//log.Debug("parallel lookup: lookup for %s failed in %s: %s", host, elapsed, err) // rafal
 	} else {
-		//log.Debug("parallel lookup: lookup for %s succeeded in %s: %s", host, elapsed, addrs)
+		//log.Debug("parallel lookup: lookup for %s succeeded in %s: %s", host, elapsed, addrs) // rafal
 	}
 
 	return addrs, err

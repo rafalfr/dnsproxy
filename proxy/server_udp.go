@@ -96,7 +96,7 @@ func (p *Proxy) udpPacketLoop(conn *net.UDPConn, reqSema syncutil.Semaphore) {
 		}
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				//log.Debug("dnsproxy: udp connection %s closed", conn.LocalAddr())
+				//log.Debug("dnsproxy: udp connection %s closed", conn.LocalAddr())	// rafal
 			} else {
 				log.Error("dnsproxy: reading from udp: %s", err)
 			}
@@ -130,7 +130,7 @@ func (p *Proxy) udpHandlePacket(
 
 	err = p.handleDNSRequest(d)
 	if err != nil {
-		//log.Debug("dnsproxy: handling dns (proto %s) request: %s", d.Proto, err)
+		//log.Debug("dnsproxy: handling dns (proto %s) request: %s", d.Proto, err)	// rafal
 	}
 }
 
