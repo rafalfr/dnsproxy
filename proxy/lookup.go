@@ -3,11 +3,12 @@ package proxy
 import (
 	"context"
 	"net/netip"
+	"slices"
 
-	proxynetutil "github.com/AdguardTeam/dnsproxy/internal/netutil"
 	"github.com/AdguardTeam/dnsproxy/proxyutil"
 	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/AdguardTeam/golibs/errors"
+	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/miekg/dns"
 )
 
@@ -19,16 +20,7 @@ type lookupResult struct {
 
 // lookupIPAddr resolves the specified host IP addresses.
 func (p *Proxy) lookupIPAddr(host string, qtype uint16, ch chan *lookupResult) {
-	req := &dns.Msg{}
-	req.Id = dns.Id()
-	req.RecursionDesired = true
-	req.Question = []dns.Question{
-		{
-			Name:   host,
-			Qtype:  qtype,
-			Qclass: dns.ClassINET,
-		},
-	}
+	req := (&dns.Msg{}).SetQuestion(host, qtype)
 
 	d := p.newDNSContext(ProtoUDP, req)
 	err := p.Resolve(d)
@@ -61,7 +53,7 @@ func (p *Proxy) LookupNetIP(
 	go p.lookupIPAddr(host, dns.TypeAAAA, ch)
 
 	var errs []error
-	for n := 0; n < 2; n++ {
+	for range 2 {
 		result := <-ch
 		if result.err != nil {
 			errs = append(errs, result.err)
@@ -81,7 +73,11 @@ func (p *Proxy) LookupNetIP(
 		return addrs, errors.Join(errs...)
 	}
 
-	proxynetutil.SortNetIPAddrs(addrs, p.Config.PreferIPv6)
+	if p.Config.PreferIPv6 {
+		slices.SortStableFunc(addrs, netutil.PreferIPv6)
+	} else {
+		slices.SortStableFunc(addrs, netutil.PreferIPv4)
+	}
 
 	return addrs, nil
 }

@@ -3,29 +3,32 @@ package proxy
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/AdguardTeam/dnsproxy/upstream"
+	"github.com/AdguardTeam/golibs/container"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
+	"github.com/AdguardTeam/golibs/mapsutil"
 	"github.com/AdguardTeam/golibs/netutil"
-	"github.com/AdguardTeam/golibs/stringutil"
-	"golang.org/x/exp/slices"
 )
 
-// UpstreamConfig is a wrapper for a list of default upstreams, a map of
-// reserved domains and corresponding upstreams.
+// UnqualifiedNames is a key for [UpstreamConfig.DomainReservedUpstreams] map to
+// specify the upstreams only used for resolving domain names consisting of a
+// single label.
+const UnqualifiedNames = "unqualified_names"
+
+// UpstreamConfig maps domain names to upstreams.
 type UpstreamConfig struct {
-	// DomainReservedUpstreams is a map of reserved domains and lists of
-	// corresponding upstreams.
+	// DomainReservedUpstreams maps the domains to the upstreams.
 	DomainReservedUpstreams map[string][]upstream.Upstream
 
-	// SpecifiedDomainUpstreams is a map of excluded domains and lists of
-	// corresponding upstreams.
+	// SpecifiedDomainUpstreams maps the specific domain names to the upstreams.
 	SpecifiedDomainUpstreams map[string][]upstream.Upstream
 
 	// SubdomainExclusions is set of domains with subdomains exclusions.
-	SubdomainExclusions *stringutil.Set
+	SubdomainExclusions *container.MapSet[string]
 
 	// Upstreams is a list of default upstreams.
 	Upstreams []upstream.Upstream
@@ -34,8 +37,10 @@ type UpstreamConfig struct {
 // type check
 var _ io.Closer = (*UpstreamConfig)(nil)
 
-// ParseUpstreamsConfig returns UpstreamConfig and error if upstreams
-// configuration is invalid.
+// ParseUpstreamsConfig returns an UpstreamConfig and nil error if the upstream
+// configuration is valid.  Otherwise returns a partially filled UpstreamConfig
+// and wrapped error containing lines with errors.  It also skips empty lines
+// and comments (lines starting with "#").
 //
 // # Simple upstreams
 //
@@ -84,22 +89,49 @@ var _ io.Closer = (*UpstreamConfig)(nil)
 //
 // TODO(e.burkov):  Consider supporting multiple upstreams in a single line for
 // default upstream syntax.
-func ParseUpstreamsConfig(upstreamConfig []string, options *upstream.Options) (*UpstreamConfig, error) {
-	if options == nil {
-		options = &upstream.Options{}
+func ParseUpstreamsConfig(
+	lines []string,
+	opts *upstream.Options,
+) (conf *UpstreamConfig, err error) {
+	if opts == nil {
+		opts = &upstream.Options{}
 	}
 
 	p := &configParser{
-		options:                  options,
+		options:                  opts,
 		upstreamsIndex:           map[string]upstream.Upstream{},
 		domainReservedUpstreams:  map[string][]upstream.Upstream{},
 		specifiedDomainUpstreams: map[string][]upstream.Upstream{},
 		subdomainsOnlyUpstreams:  map[string][]upstream.Upstream{},
-		subdomainsOnlyExclusions: stringutil.NewSet(),
+		subdomainsOnlyExclusions: container.NewMapSet[string](),
 	}
 
-	return p.parse(upstreamConfig)
+	return p.parse(lines)
 }
+
+// ParseError is an error which contains an index of the line of the upstream
+// list.
+type ParseError struct {
+	// err is the original error.
+	err error
+
+	// Idx is an index of the lines.  See [ParseUpstreamsConfig].
+	Idx int
+}
+
+// type check
+var _ error = (*ParseError)(nil)
+
+// Error implements the [error] interface for *ParseError.
+func (e *ParseError) Error() (msg string) {
+	return fmt.Sprintf("parsing error at index %d: %s", e.Idx, e.err)
+}
+
+// type check
+var _ errors.Wrapper = (*ParseError)(nil)
+
+// Unwrap implements the [errors.Wrapper] interface for *ParseError.
+func (e *ParseError) Unwrap() (unwrapped error) { return e.err }
 
 // configParser collects the results of parsing an upstream config.
 type configParser struct {
@@ -122,17 +154,18 @@ type configParser struct {
 	subdomainsOnlyUpstreams map[string][]upstream.Upstream
 
 	// subdomainsOnlyExclusions is set of domains with subdomains exclusions.
-	subdomainsOnlyExclusions *stringutil.Set
+	subdomainsOnlyExclusions *container.MapSet[string]
 
 	// upstreams is a list of default upstreams.
 	upstreams []upstream.Upstream
 }
 
 // parse returns UpstreamConfig and error if upstreams configuration is invalid.
-func (p *configParser) parse(conf []string) (c *UpstreamConfig, err error) {
-	for i, l := range conf {
+func (p *configParser) parse(lines []string) (c *UpstreamConfig, err error) {
+	var errs []error
+	for i, l := range lines {
 		if err = p.parseLine(i, l); err != nil {
-			return nil, err
+			errs = append(errs, &ParseError{Idx: i, err: err})
 		}
 	}
 
@@ -147,12 +180,16 @@ func (p *configParser) parse(conf []string) (c *UpstreamConfig, err error) {
 		DomainReservedUpstreams:  p.domainReservedUpstreams,
 		SpecifiedDomainUpstreams: p.specifiedDomainUpstreams,
 		SubdomainExclusions:      p.subdomainsOnlyExclusions,
-	}, nil
+	}, errors.Join(errs...)
 }
 
 // parseLine returns an error if upstream configuration line is invalid.
 func (p *configParser) parseLine(idx int, confLine string) (err error) {
-	upstreams, domains, err := splitConfigLine(idx, confLine)
+	if len(confLine) == 0 || confLine[0] == '#' {
+		return nil
+	}
+
+	upstreams, domains, err := splitConfigLine(confLine)
 	if err != nil {
 		// Don't wrap the error since it's informative enough as is.
 		return err
@@ -165,7 +202,7 @@ func (p *configParser) parseLine(idx int, confLine string) (err error) {
 	}
 
 	for _, u := range upstreams {
-		err = p.specifyUpstream(domains, u, idx, confLine)
+		err = p.specifyUpstream(domains, u, idx)
 		if err != nil {
 			// Don't wrap the error since it's informative enough as is.
 			return err
@@ -177,15 +214,15 @@ func (p *configParser) parseLine(idx int, confLine string) (err error) {
 
 // splitConfigLine parses upstream configuration line and returns list upstream
 // addresses (one or many), list of domains for which this upstream is reserved
-// (may be nil) or error if something went wrong.
-func splitConfigLine(idx int, confLine string) (upstreams, domains []string, err error) {
+// (may be nil).  It returns an error if the upstream format is incorrect.
+func splitConfigLine(confLine string) (upstreams, domains []string, err error) {
 	if !strings.HasPrefix(confLine, "[/") {
 		return []string{confLine}, nil, nil
 	}
 
 	domainsLine, upstreamsLine, found := strings.Cut(confLine[len("[/"):], "/]")
 	if !found || upstreamsLine == "" {
-		return nil, nil, fmt.Errorf("wrong upstream specification %d %q", idx, confLine)
+		return nil, nil, errors.Error("wrong upstream format")
 	}
 
 	// split domains list
@@ -209,20 +246,14 @@ func splitConfigLine(idx int, confLine string) (upstreams, domains []string, err
 }
 
 // specifyUpstream specifies the upstream for domains.
-func (p *configParser) specifyUpstream(
-	domains []string,
-	u string,
-	idx int,
-	confLine string,
-) (err error) {
+func (p *configParser) specifyUpstream(domains []string, u string, idx int) (err error) {
 	dnsUpstream, ok := p.upstreamsIndex[u]
 	// TODO(e.burkov):  Improve identifying duplicate upstreams.
 	if !ok {
 		// create an upstream
 		dnsUpstream, err = upstream.AddressToUpstream(u, p.options.Clone())
 		if err != nil {
-			return fmt.Errorf("cannot prepare the upstream %d %q (%s): %s",
-				idx, confLine, p.options.Bootstrap, err)
+			return fmt.Errorf("cannot prepare the upstream: %s", err)
 		}
 
 		// save to the index
@@ -231,11 +262,19 @@ func (p *configParser) specifyUpstream(
 
 	addr := dnsUpstream.Address()
 	if len(domains) == 0 {
-		log.Debug("dnsproxy: upstream at index %d: %s", idx, addr)
+		// TODO(s.chzhen):  Handle duplicates.
 		p.upstreams = append(p.upstreams, dnsUpstream)
+
+		// TODO(s.chzhen):  Logs without index.
+		log.Debug("dnsproxy: upstream at index %d: %s", idx, addr)
 	} else {
-		log.Debug("dnsproxy: upstream at index %d: %s is reserved for %s", idx, addr, domains)
 		p.includeToReserved(dnsUpstream, domains)
+
+		log.Debug("dnsproxy: upstream at index %d: %s is reserved for %d domains",
+			idx,
+			addr,
+			len(domains),
+		)
 	}
 
 	return nil
@@ -275,65 +314,102 @@ func (p *configParser) includeToReserved(dnsUpstream upstream.Upstream, domains 
 	}
 }
 
-// errNoDefaultUpstreams is returned when no default upstreams specified within
-// a [Config.UpstreamConfig].
-const errNoDefaultUpstreams errors.Error = "no default upstreams specified"
-
 // validate returns an error if the upstreams aren't configured properly.  c
-// considered valid if it contains at least a single default upstream.  Nil c,
-// as well as c with no default upstreams causes [ErrNoDefaultUpstreams].  Empty
-// c causes [upstream.ErrNoUpstreams].
+// considered valid if it contains at least a single default upstream.  Empty c
+// causes [upstream.ErrNoUpstreams].
 func (uc *UpstreamConfig) validate() (err error) {
+	const (
+		errNilConf   errors.Error = "upstream config is nil"
+		errNoDefault errors.Error = "no default upstreams specified"
+	)
+
 	switch {
 	case uc == nil:
-		return fmt.Errorf("%w; uc is nil", errNoDefaultUpstreams)
+		return errNilConf
 	case len(uc.Upstreams) > 0:
 		return nil
 	case len(uc.DomainReservedUpstreams) == 0 && len(uc.SpecifiedDomainUpstreams) == 0:
 		return upstream.ErrNoUpstreams
 	default:
-		return errNoDefaultUpstreams
+		return errNoDefault
 	}
 }
 
-// getUpstreamsForDomain looks for a domain in the reserved domains map and
-// returns a list of corresponding upstreams.  It returns default upstreams list
-// if the domain was not found in the map.  More specific domains take priority
-// over less specific domains.  For example, take a map that contains the
-// following keys: host.com and www.host.com.  If we are looking for domain
-// mail.host.com, this method will return value of host.com key.  If we are
-// looking for domain www.host.com, this method will return value of the
-// www.host.com key.  If a more specific domain value is nil, it means that the
-// domain was excluded and should be exchanged with default upstreams.
-func (uc *UpstreamConfig) getUpstreamsForDomain(host string) (ups []upstream.Upstream) {
+// ValidatePrivateConfig returns an error if uc isn't valid, or, treated as
+// private upstreams configuration, contains specifications for invalid domains.
+func ValidatePrivateConfig(uc *UpstreamConfig, privateSubnets netutil.SubnetSet) (err error) {
+	if err = uc.validate(); err != nil {
+		// Don't wrap the error since it's informative enough as is.
+		return err
+	}
+
+	var errs []error
+	rangeFunc := func(domain string, _ []upstream.Upstream) (ok bool) {
+		pref, extErr := netutil.ExtractReversedAddr(domain)
+		switch {
+		case extErr != nil:
+			// Don't wrap the error since it's informative enough as is.
+			errs = append(errs, extErr)
+		case pref.Bits() == 0:
+			// Allow private subnets for subdomains of the root domain.
+		case !privateSubnets.Contains(pref.Addr()):
+			errs = append(errs, fmt.Errorf("reversed subnet in %q is not private", domain))
+		default:
+			// Go on.
+		}
+
+		return true
+	}
+
+	mapsutil.SortedRange(uc.DomainReservedUpstreams, rangeFunc)
+
+	return errors.Join(errs...)
+}
+
+// getUpstreamsForDomain returns the upstreams specified for resolving fqdn.  It
+// always returns the default set of upstreams if the domain is not reserved for
+// any other upstreams.
+//
+// More specific domains take priority over less specific ones.  For example, if
+// the upstreams specified for the following domains:
+//
+//   - host.com
+//   - www.host.com
+//
+// The request for mail.host.com will be resolved using the upstreams specified
+// for host.com.
+func (uc *UpstreamConfig) getUpstreamsForDomain(fqdn string) (ups []upstream.Upstream) {
 	if len(uc.DomainReservedUpstreams) == 0 {
 		return uc.Upstreams
 	}
 
-	dotsCount := strings.Count(host, ".")
-	if dotsCount < 2 {
-		host = UnqualifiedNames
-	} else {
-		host = strings.ToLower(host)
-		if uc.SubdomainExclusions.Has(host) {
-			return uc.lookupSubdomainExclusion(host)
-		}
+	fqdn = strings.ToLower(fqdn)
+	if uc.SubdomainExclusions.Has(fqdn) {
+		return uc.lookupSubdomainExclusion(fqdn)
 	}
 
-	for host != "" {
-		var ok bool
-		if ups, ok = uc.lookupUpstreams(host); ok {
+	ups, ok := uc.lookupUpstreams(fqdn)
+	if ok {
+		return ups
+	}
+
+	if _, fqdn, _ = strings.Cut(fqdn, "."); fqdn == "" {
+		fqdn = UnqualifiedNames
+	}
+
+	for fqdn != "" {
+		if ups, ok = uc.lookupUpstreams(fqdn); ok {
 			return ups
 		}
 
-		_, host, _ = strings.Cut(host, ".")
+		_, fqdn, _ = strings.Cut(fqdn, ".")
 	}
 
 	return uc.Upstreams
 }
 
 // getUpstreamsForDS is like [getUpstreamsForDomain], but intended for DS
-// queries only, so that it matches the host without the first label.
+// queries only, so that it matches fqdn without the first label.
 //
 // A DS RRset SHOULD be present at a delegation point when the child zone is
 // signed.  The DS RRset MAY contain multiple records, each referencing a public
@@ -341,13 +417,13 @@ func (uc *UpstreamConfig) getUpstreamsForDomain(host string) (ups []upstream.Ups
 // in a zone MUST be signed, and DS RRsets MUST NOT appear at a zone's apex.
 //
 // See https://datatracker.ietf.org/doc/html/rfc4035#section-2.4
-func (uc *UpstreamConfig) getUpstreamsForDS(host string) (ups []upstream.Upstream) {
-	_, host, found := strings.Cut(host, ".")
-	if !found {
+func (uc *UpstreamConfig) getUpstreamsForDS(fqdn string) (ups []upstream.Upstream) {
+	_, fqdn, _ = strings.Cut(fqdn, ".")
+	if fqdn == "" {
 		return uc.Upstreams
 	}
 
-	return uc.getUpstreamsForDomain(host)
+	return uc.getUpstreamsForDomain(fqdn)
 }
 
 // lookupSubdomainExclusion returns upstreams for the host from subdomain
@@ -368,7 +444,7 @@ func (uc *UpstreamConfig) lookupSubdomainExclusion(host string) (u []upstream.Up
 	return uc.Upstreams
 }
 
-// lookupUpstreams returns upstreams for a domain name.  Returns default
+// lookupUpstreams returns upstreams for a domain name.  It returns default
 // upstream list for domain name excluded by domain reserved upstreams.
 func (uc *UpstreamConfig) lookupUpstreams(name string) (ups []upstream.Upstream, ok bool) {
 	ups, ok = uc.DomainReservedUpstreams[name]
@@ -405,7 +481,7 @@ func (uc *UpstreamConfig) Close() (err error) {
 	}
 
 	if len(closeErrs) > 0 {
-		return errors.List("failed to close some upstreams", closeErrs...)
+		return fmt.Errorf("failed to close some upstreams: %w", errors.Join(closeErrs...))
 	}
 
 	return nil

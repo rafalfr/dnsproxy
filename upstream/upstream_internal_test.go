@@ -9,17 +9,14 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"io"
 	"math/big"
 	"net"
 	"net/netip"
 	"net/url"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/testutil"
 	"github.com/ameshkov/dnsstamps"
@@ -28,13 +25,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TODO(ameshkov): make tests here not depend on external servers.
+// TODO(ameshkov): Make tests here not depend on external servers.
 
 func TestMain(m *testing.M) {
-	// Disable logging in tests.
-	log.SetOutput(io.Discard)
-
-	os.Exit(m.Run())
+	testutil.DiscardLogOutput(m)
 }
 
 func TestUpstream_bootstrapTimeout(t *testing.T) {
@@ -63,7 +57,7 @@ func TestUpstream_bootstrapTimeout(t *testing.T) {
 
 	ch := make(chan int, count)
 	abort := make(chan string, 1)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		go func(idx int) {
 			t.Logf("Start %d", idx)
 			req := createTestMessage()
@@ -92,7 +86,7 @@ func TestUpstream_bootstrapTimeout(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < count; i++ {
+	for range count {
 		select {
 		case res := <-ch:
 			t.Logf("Got result from %d", res)
@@ -165,11 +159,11 @@ func TestUpstreams(t *testing.T) {
 	}, {
 		// AdGuard DNS (DNSCrypt)
 		bootstrap: nil,
-		address:   "sdns://AQIAAAAAAAAAFDE3Ni4xMDMuMTMwLjEzMDo1NDQzINErR_JS3PLCu_iZEIbq95zkSV2LFsigxDIuUso_OQhzIjIuZG5zY3J5cHQuZGVmYXVsdC5uczEuYWRndWFyZC5jb20",
+		address:   "sdns://AQMAAAAAAAAAETk0LjE0MC4xNC4xNDo1NDQzINErR_JS3PLCu_iZEIbq95zkSV2LFsigxDIuUso_OQhzIjIuZG5zY3J5cHQuZGVmYXVsdC5uczEuYWRndWFyZC5jb20",
 	}, {
 		// AdGuard Family (DNSCrypt)
 		bootstrap: googleBoot,
-		address:   "sdns://AQIAAAAAAAAAFDE3Ni4xMDMuMTMwLjEzMjo1NDQzILgxXdexS27jIKRw3C7Wsao5jMnlhvhdRUXWuMm1AFq6ITIuZG5zY3J5cHQuZmFtaWx5Lm5zMS5hZGd1YXJkLmNvbQ",
+		address:   "sdns://AQMAAAAAAAAAETk0LjE0MC4xNC4xNTo1NDQzILgxXdexS27jIKRw3C7Wsao5jMnlhvhdRUXWuMm1AFq6ITIuZG5zY3J5cHQuZmFtaWx5Lm5zMS5hZGd1YXJkLmNvbQ",
 	}, {
 		// Cloudflare DNS (DNS-over-HTTPS)
 		bootstrap: googleBoot,
@@ -229,6 +223,14 @@ func TestAddressToUpstream(t *testing.T) {
 		opt:  nil,
 		want: "1.1.1.1:53",
 	}, {
+		addr: "1.1.1.1:5353",
+		opt:  nil,
+		want: "1.1.1.1:5353",
+	}, {
+		addr: "one:5353",
+		opt:  nil,
+		want: "one:5353",
+	}, {
 		addr: "one.one.one.one",
 		opt:  nil,
 		want: "one.one.one.one:53",
@@ -252,6 +254,18 @@ func TestAddressToUpstream(t *testing.T) {
 		addr: "h3://one.one.one.one",
 		opt:  opt,
 		want: "https://one.one.one.one:443",
+	}, {
+		addr: "::ffff:1.1.1.1",
+		opt:  nil,
+		want: "[::ffff:1.1.1.1]:53",
+	}, {
+		addr: "https://[2606:4700:4700::1111]/dns-query",
+		opt:  nil,
+		want: "https://[2606:4700:4700::1111]:443/dns-query",
+	}, {
+		addr: "https://[2606:4700:4700::1111]:443/dns-query",
+		opt:  nil,
+		want: "https://[2606:4700:4700::1111]:443/dns-query",
 	}}
 
 	for _, tc := range testCases {
@@ -274,15 +288,48 @@ func TestAddressToUpstream_bads(t *testing.T) {
 		wantErrMsg: "unsupported url scheme: asdf",
 	}, {
 		addr: "12345.1.1.1:1234567",
-		wantErrMsg: `invalid address 12345.1.1.1:1234567: ` +
-			`strconv.ParseUint: parsing "1234567": value out of range`,
+		wantErrMsg: `invalid port 1234567: strconv.ParseUint: parsing "1234567": ` +
+			`value out of range`,
 	}, {
 		addr: ":1234567",
-		wantErrMsg: `invalid address :1234567: ` +
-			`strconv.ParseUint: parsing "1234567": value out of range`,
+		wantErrMsg: `invalid port 1234567: strconv.ParseUint: parsing "1234567": ` +
+			`value out of range`,
 	}, {
 		addr:       "host:",
-		wantErrMsg: `invalid address host:: strconv.ParseUint: parsing "": invalid syntax`,
+		wantErrMsg: `invalid port : strconv.ParseUint: parsing "": invalid syntax`,
+	}, {
+		addr:       ":53",
+		wantErrMsg: `invalid address : bad hostname "": hostname is empty`,
+	}, {
+		addr: "!!!",
+		wantErrMsg: `invalid address !!!: bad hostname "!!!": bad top-level domain name ` +
+			`label "!!!": bad top-level domain name label rune '!'`,
+	}, {
+		addr: "123",
+		wantErrMsg: `invalid address 123: bad hostname "123": bad top-level domain name ` +
+			`label "123": all octets are numeric`,
+	}, {
+		addr: "tcp://12345.1.1.1:1234567",
+		wantErrMsg: `invalid port 1234567: strconv.ParseUint: parsing "1234567": ` +
+			`value out of range`,
+	}, {
+		addr: "tcp://:1234567",
+		wantErrMsg: `invalid port 1234567: strconv.ParseUint: parsing "1234567": ` +
+			`value out of range`,
+	}, {
+		addr:       "tcp://host:",
+		wantErrMsg: `invalid port : strconv.ParseUint: parsing "": invalid syntax`,
+	}, {
+		addr:       "tcp://:53",
+		wantErrMsg: `invalid address : bad hostname "": hostname is empty`,
+	}, {
+		addr: "tcp://!!!",
+		wantErrMsg: `invalid address !!!: bad hostname "!!!": bad top-level domain name ` +
+			`label "!!!": bad top-level domain name label rune '!'`,
+	}, {
+		addr: "tcp://123",
+		wantErrMsg: `invalid address 123: bad hostname "123": bad top-level domain name ` +
+			`label "123": all octets are numeric`,
 	}}
 
 	for _, tc := range testCases {
@@ -530,7 +577,7 @@ func checkRaceCondition(u Upstream) {
 
 	makeRequests := func() {
 		defer wg.Done()
-		for i := 0; i < reqCount; i++ {
+		for range reqCount {
 			req := createTestMessage()
 			// Ignore exchange errors here, the point is to check for races.
 			_, _ = u.Exchange(req)
@@ -538,7 +585,7 @@ func checkRaceCondition(u Upstream) {
 	}
 
 	wg.Add(goroutinesCount)
-	for i := 0; i < goroutinesCount; i++ {
+	for range goroutinesCount {
 		go makeRequests()
 	}
 
@@ -629,7 +676,13 @@ func createServerTLSConfig(
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 	}
-	template.DNSNames = append(template.DNSNames, tlsServerName)
+
+	ipAddress := net.ParseIP(tlsServerName)
+	if ipAddress != nil {
+		template.IPAddresses = append(template.IPAddresses, ipAddress)
+	} else {
+		template.DNSNames = append(template.DNSNames, tlsServerName)
+	}
 
 	derBytes, err := x509.CreateCertificate(
 		rand.Reader,

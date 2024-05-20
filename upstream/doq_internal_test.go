@@ -3,38 +3,41 @@ package upstream
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
-	"strconv"
+	"net/netip"
+	"net/url"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/AdguardTeam/dnsproxy/proxyutil"
+	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/testutil"
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/logging"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestUpstreamDoQ(t *testing.T) {
-	srv := startDoQServer(t, 0)
-	t.Cleanup(srv.Shutdown)
+	tlsConf, rootCAs := createServerTLSConfig(t, "127.0.0.1")
+
+	srv := startDoQServer(t, tlsConf, 0)
 
 	address := fmt.Sprintf("quic://%s", srv.addr)
 	var lastState tls.ConnectionState
 	opts := &Options{
-		InsecureSkipVerify: true,
 		VerifyConnection: func(state tls.ConnectionState) error {
 			lastState = state
 
 			return nil
 		},
+		RootCAs: rootCAs,
 	}
 	u, err := AddressToUpstream(address, opts)
 	require.NoError(t, err)
@@ -44,13 +47,13 @@ func TestUpstreamDoQ(t *testing.T) {
 	var conn quic.Connection
 
 	// Test that it responds properly
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		checkUpstream(t, u, address)
 
 		if conn == nil {
 			conn = uq.conn
 		} else {
-			// This way we test that the conn is properly reused.
+			// This way we test that the connection is properly reused.
 			require.Equal(t, conn, uq.conn)
 		}
 	}
@@ -73,58 +76,109 @@ func TestUpstreamDoQ(t *testing.T) {
 	checkRaceCondition(u)
 }
 
-func TestUpstreamDoQ_serverRestart(t *testing.T) {
+func TestUpstream_Exchange_quicServerCloseConn(t *testing.T) {
+	// Use the same tlsConf for all servers to preserve the data necessary for
+	// 0-RTT connections.
+	tlsConf, rootCAs := createServerTLSConfig(t, "127.0.0.1")
+
 	// Run the first server instance.
-	srv := startDoQServer(t, 0)
+	srv := startDoQServer(t, tlsConf, 0)
 
 	// Create a DNS-over-QUIC upstream.
 	address := fmt.Sprintf("quic://%s", srv.addr)
-	u, err := AddressToUpstream(address, &Options{InsecureSkipVerify: true, Timeout: time.Second})
+	u, err := AddressToUpstream(address, &Options{RootCAs: rootCAs})
+
 	require.NoError(t, err)
 	testutil.CleanupAndRequireSuccess(t, u.Close)
 
 	// Test that the upstream works properly.
 	checkUpstream(t, u, address)
 
-	// Now let's restart the server on the same address.
-	_, portStr, err := net.SplitHostPort(srv.addr)
-	require.NoError(t, err)
-	port, err := strconv.Atoi(portStr)
+	// Close all active connections.
+	err = srv.closeConns()
 	require.NoError(t, err)
 
-	// Shutdown the first server.
-	srv.Shutdown()
+	// Now run several queries in parallel to check that the error from the
+	// following issue is not happening:
+	// https://github.com/AdguardTeam/dnsproxy/issues/389.
+	//
+	// Run 10 queries in parallel as the initial testing showed that this is
+	// enough to trigger the race issue.
+	const parallelQueries = 10
 
-	// Start the new one on the same port.
-	srv = startDoQServer(t, port)
+	wg := sync.WaitGroup{}
+	wg.Add(parallelQueries)
 
-	// Check that everything works after restart.
-	checkUpstream(t, u, address)
+	for i := 0; i < 10; i++ {
+		pt := testutil.PanicT{}
 
-	// Stop the server again.
-	srv.Shutdown()
+		go func(t assert.TestingT) {
+			defer wg.Done()
 
-	// Now try to send a message and make sure that it returns an error.
-	_, err = u.Exchange(createTestMessage())
-	require.Error(t, err)
+			req := createTestMessage()
+			_, errExch := u.Exchange(req)
 
-	// Start the server one more time.
-	srv = startDoQServer(t, port)
-	defer srv.Shutdown()
+			assert.NoError(t, errExch)
+		}(pt)
+	}
 
-	// Check that everything works after the second restart.
-	checkUpstream(t, u, address)
+	wg.Wait()
+}
+
+func TestUpstreamDoQ_serverRestart(t *testing.T) {
+	// Use the same tlsConf for all servers to preserve the data necessary for
+	// 0-RTT connections.
+	tlsConf, rootCAs := createServerTLSConfig(t, "127.0.0.1")
+
+	var addr netip.AddrPort
+	var upsStr string
+	var u Upstream
+
+	t.Run("first_try", func(t *testing.T) {
+		srv := startDoQServer(t, tlsConf, 0)
+
+		addr = netip.MustParseAddrPort(srv.addr)
+		upsStr = (&url.URL{
+			Scheme: "quic",
+			Host:   addr.String(),
+		}).String()
+
+		var err error
+		u, err = AddressToUpstream(upsStr, &Options{RootCAs: rootCAs})
+		require.NoError(t, err)
+
+		checkUpstream(t, u, upsStr)
+	})
+	require.False(t, t.Failed())
+	testutil.CleanupAndRequireSuccess(t, u.Close)
+
+	t.Run("second_try", func(t *testing.T) {
+		_ = startDoQServer(t, tlsConf, int(addr.Port()))
+
+		checkUpstream(t, u, upsStr)
+	})
+	require.False(t, t.Failed())
+
+	t.Run("retry", func(t *testing.T) {
+		_, err := u.Exchange(createTestMessage())
+		require.Error(t, err)
+
+		_ = startDoQServer(t, tlsConf, int(addr.Port()))
+
+		checkUpstream(t, u, upsStr)
+	})
 }
 
 func TestUpstreamDoQ_0RTT(t *testing.T) {
-	srv := startDoQServer(t, 0)
-	t.Cleanup(srv.Shutdown)
+	tlsConf, rootCAs := createServerTLSConfig(t, "127.0.0.1")
+
+	srv := startDoQServer(t, tlsConf, 0)
 
 	tracer := &quicTracer{}
 	address := fmt.Sprintf("quic://%s", srv.addr)
 	u, err := AddressToUpstream(address, &Options{
-		InsecureSkipVerify: true,
-		QUICTracer:         tracer.TracerForConnection,
+		QUICTracer: tracer.TracerForConnection,
+		RootCAs:    rootCAs,
 	})
 	require.NoError(t, err)
 	testutil.CleanupAndRequireSuccess(t, u.Close)
@@ -166,35 +220,45 @@ func TestUpstreamDoQ_0RTT(t *testing.T) {
 
 // testDoHServer is an instance of a test DNS-over-QUIC server.
 type testDoQServer struct {
-	// tlsConfig is the TLS configuration that is used for this server.
-	tlsConfig *tls.Config
-
-	// rootCAs is the pool with root certificates used by the test server.
-	rootCAs *x509.CertPool
-
 	// listener is the QUIC connections listener.
 	listener *quic.EarlyListener
+
+	// conns is the list of connections that are currently active.
+	conns map[quic.EarlyConnection]struct{}
+
+	// connsMu protects conns.
+	connsMu *sync.Mutex
 
 	// addr is the address that this server listens to.
 	addr string
 }
 
 // Shutdown stops the test server.
-func (s *testDoQServer) Shutdown() {
-	_ = s.listener.Close()
+func (s *testDoQServer) Shutdown() (err error) {
+	errConns := s.closeConns()
+	errListener := s.listener.Close()
+
+	return errors.Join(errConns, errListener)
 }
 
 // Serve serves DoQ requests.
 func (s *testDoQServer) Serve() {
 	for {
-		conn, err := s.listener.Accept(context.Background())
-		if err == quic.ErrServerClosed {
-			// Finish serving on ErrServerClosed error.
-			return
-		}
-
+		var conn quic.EarlyConnection
+		var err error
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			conn, err = s.listener.Accept(ctx)
+		}()
 		if err != nil {
-			log.Debug("error while accepting a new connection: %v", err)
+			if errors.Is(err, quic.ErrServerClosed) {
+				log.Debug("test doq: accepting: %s", err)
+			} else {
+				log.Error("test doq: accepting: %s", err)
+			}
+
+			return
 		}
 
 		go s.handleQUICConnection(conn)
@@ -203,17 +267,20 @@ func (s *testDoQServer) Serve() {
 
 // handleQUICConnection handles incoming QUIC connection.
 func (s *testDoQServer) handleQUICConnection(conn quic.EarlyConnection) {
+	s.addConn(conn)
+	defer s.closeConn(conn)
+
 	for {
 		stream, err := conn.AcceptStream(context.Background())
 		if err != nil {
-			_ = conn.CloseWithError(QUICCodeNoError, "")
-
 			return
 		}
 
 		go func() {
 			qErr := s.handleQUICStream(stream)
 			if qErr != nil {
+				log.Error("test doq: handling from %s: %s", conn.RemoteAddr(), qErr)
+
 				_ = conn.CloseWithError(QUICCodeNoError, "")
 			}
 		}()
@@ -230,6 +297,8 @@ func (s *testDoQServer) handleQUICStream(stream quic.Stream) (err error) {
 	if err != nil && err != io.EOF {
 		return err
 	}
+
+	stream.CancelRead(0)
 
 	req := &dns.Msg{}
 	packetLen := binary.BigEndian.Uint16(buf[:2])
@@ -251,32 +320,85 @@ func (s *testDoQServer) handleQUICStream(stream quic.Stream) (err error) {
 	return err
 }
 
-// startDoQServer starts a test DoQ server.
-func startDoQServer(t *testing.T, port int) (s *testDoQServer) {
-	tlsConfig, rootCAs := createServerTLSConfig(t, "127.0.0.1")
-	tlsConfig.NextProtos = []string{NextProtoDQ}
+// addConn adds conn to the list of active connections.
+func (s *testDoQServer) addConn(conn quic.EarlyConnection) {
+	s.connsMu.Lock()
+	defer s.connsMu.Unlock()
 
-	listen, err := quic.ListenAddrEarly(
-		fmt.Sprintf("127.0.0.1:%d", port),
-		tlsConfig,
+	s.conns[conn] = struct{}{}
+}
+
+// closeConn closes the specified QUIC connection.
+func (s *testDoQServer) closeConn(conn quic.EarlyConnection) {
+	s.connsMu.Lock()
+	defer s.connsMu.Unlock()
+
+	err := conn.CloseWithError(QUICCodeNoError, "")
+	if err != nil {
+		log.Debug("failed to close conn: %v", err)
+	}
+
+	delete(s.conns, conn)
+}
+
+// closeConns closes all active connections.
+func (s *testDoQServer) closeConns() (err error) {
+	s.connsMu.Lock()
+	defer s.connsMu.Unlock()
+
+	var errs []error
+
+	for conn := range s.conns {
+		errConn := conn.CloseWithError(QUICCodeNoError, "")
+		if errConn != nil {
+			errs = append(errs, errConn)
+		}
+
+		delete(s.conns, conn)
+	}
+
+	return errors.Join(errs...)
+}
+
+// startDoQServer starts a test DoQ server.
+// startDoQServer starts a test DoQ server.  Note that it adds its own shutdown
+// to cleanup of t.
+func startDoQServer(t *testing.T, tlsConf *tls.Config, port int) (s *testDoQServer) {
+	tlsConf.NextProtos = []string{NextProtoDQ}
+
+	udpAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("127.0.0.1:%d", port))
+	require.NoError(t, err)
+
+	conn, err := net.ListenUDP("udp", udpAddr)
+	require.NoError(t, err)
+	testutil.CleanupAndRequireSuccess(t, conn.Close)
+
+	transport := &quic.Transport{
+		Conn: conn,
+		// Necessary for 0-RTT.
+		VerifySourceAddress: func(a net.Addr) bool {
+			return true
+		},
+	}
+
+	listen, err := transport.ListenEarly(
+		tlsConf,
 		&quic.Config{
-			// Necessary for 0-RTT.
-			RequireAddressValidation: func(net.Addr) (ok bool) {
-				return false
-			},
 			Allow0RTT: true,
 		},
 	)
 	require.NoError(t, err)
+	testutil.CleanupAndRequireSuccess(t, transport.Close)
 
 	s = &testDoQServer{
-		addr:      listen.Addr().String(),
-		tlsConfig: tlsConfig,
-		rootCAs:   rootCAs,
-		listener:  listen,
+		addr:     listen.Addr().String(),
+		listener: listen,
+		conns:    map[quic.EarlyConnection]struct{}{},
+		connsMu:  &sync.Mutex{},
 	}
 
 	go s.Serve()
+	testutil.CleanupAndRequireSuccess(t, s.Shutdown)
 
 	return s
 }

@@ -8,13 +8,12 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"slices"
 	"time"
 
-	proxynetutil "github.com/AdguardTeam/dnsproxy/internal/netutil"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
-	"golang.org/x/exp/slices"
 )
 
 // Network is a network type for use in [Resolver]'s methods.
@@ -71,15 +70,16 @@ func ResolveDialContext(
 		defer cancel()
 	}
 
+	// TODO(e.burkov):  Use network properly, perhaps, pass it through options.
 	ips, err := r.LookupNetIP(ctx, NetworkIP, host)
 	if err != nil {
 		return nil, fmt.Errorf("resolving hostname: %w", err)
 	}
 
 	if preferV6 {
-		slices.SortStableFunc(ips, proxynetutil.PreferIPv6)
+		slices.SortStableFunc(ips, netutil.PreferIPv6)
 	} else {
-		slices.SortStableFunc(ips, proxynetutil.PreferIPv4)
+		slices.SortStableFunc(ips, netutil.PreferIPv4)
 	}
 
 	addrs := make([]string, 0, len(ips))

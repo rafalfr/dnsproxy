@@ -3,7 +3,7 @@
 # This comment is used to simplify checking local copies of the script.  Bump
 # this number every time a significant change is made to this script.
 #
-# AdGuard-Project-Version: 5
+# AdGuard-Project-Version: 7
 
 verbose="${VERBOSE:-0}"
 readonly verbose
@@ -30,42 +30,19 @@ set -f -u
 
 
 
-# Warnings
-
-go_version="$( "${GO:-go}" version )"
-readonly go_version
-
-go_min_version='go1.20.12'
-go_version_msg="
-warning: your go version (${go_version}) is different from the recommended minimal one (${go_min_version}).
-if you have the version installed, please set the GO environment variable.
-for example:
-
-	export GO='${go_min_version}'
-"
-readonly go_min_version go_version_msg
-
-case "$go_version"
-in
-('go version'*"$go_min_version"*)
-	# Go on.
-	;;
-(*)
-	echo "$go_version_msg" 1>&2
-	;;
-esac
-
-
-
 # Simple analyzers
 
 # blocklist_imports is a simple check against unwanted packages.  The following
 # packages are banned:
 #
-#   *  Packages errors and log are replaced by our own packages in the
+#   *  Package errors is replaced by our own package in the
 #      github.com/AdguardTeam/golibs module.
 #
 #   *  Package io/ioutil is soft-deprecated.
+#
+#   *  Package log and github.com/AdguardTeam/golibs/log are replaced by
+#      stdlib's new package log/slog and AdGuard's new utilities package
+#      github.com/AdguardTeam/golibs/logutil/slogutil.
 #
 #   *  Package reflect is often an overkill, and for deep comparisons there are
 #      much better functions in module github.com/google/go-cmp.  Which is
@@ -74,9 +51,11 @@ esac
 #
 #      See https://github.com/golang/go/issues/45200.
 #
-#   *  Package sort is replaced by golang.org/x/exp/slices.
+#   *  Package sort is replaced by package slices.
 #
 #   *  Package unsafe is… unsafe.
+#
+#   *  Package golang.org/x/exp/slices has been moved into stdlib.
 #
 #   *  Package golang.org/x/net/context has been moved into stdlib.
 #
@@ -84,17 +63,19 @@ esac
 # schemas, which use package reflect.  If your project needs more exceptions,
 # add and document them.
 #
-# TODO(a.garipov): Add deprecated packages golang.org/x/exp/maps and
-# golang.org/x/exp/slices once all projects switch to Go 1.21.
+# TODO(a.garipov): Add golibs/log.
+# TODO(a.garipov): Add deprecated package golang.org/x/exp/maps once all
+# projects switch to Go 1.23.
 blocklist_imports() {
 	git grep\
 		-e '[[:space:]]"errors"$'\
+		-e '[[:space:]]"golang.org/x/exp/slices"$'\
+		-e '[[:space:]]"golang.org/x/net/context"$'\
 		-e '[[:space:]]"io/ioutil"$'\
 		-e '[[:space:]]"log"$'\
 		-e '[[:space:]]"reflect"$'\
 		-e '[[:space:]]"sort"$'\
 		-e '[[:space:]]"unsafe"$'\
-		-e '[[:space:]]"golang.org/x/net/context"$'\
 		-n\
 		-- '*.go'\
 		':!*.pb.go'\
@@ -165,7 +146,7 @@ run_linter -e gofumpt --extra -e -l .
 
 # TODO(a.garipov): golint is deprecated, find a suitable replacement.
 
-run_linter "$GO" vet ./...
+run_linter "${GO:-go}" vet ./...
 
 run_linter govulncheck ./...
 
@@ -174,26 +155,26 @@ run_linter gocyclo --over 10\
 	./internal/bootstrap/\
 	./internal/netutil/\
 	./internal/version/\
+	./fastip/\
 	./proxyutil/\
 	./upstream/\
 	;
 
 run_linter gocyclo --over 20 ./main.go
-run_linter gocyclo --over 18 ./fastip/
 run_linter gocyclo --over 15 ./proxy/
 
 # TODO(a.garipov): Enable for all.
 run_linter gocognit --over 10\
 	./internal/bootstrap/\
+	./internal/netutil/\
 	./internal/version/\
+	./fastip/\
 	./proxyutil/\
 	./upstream/\
 	;
 
 run_linter gocognit --over 35 ./main.go
-run_linter gocognit --over 31 ./proxy/
-run_linter gocognit --over 29 ./fastip/
-run_linter gocognit --over 14 ./internal/netutil/
+run_linter gocognit --over 17 ./proxy/
 
 run_linter ineffassign ./...
 
@@ -207,11 +188,7 @@ run_linter looppointer ./...
 
 run_linter nilness ./...
 
-# TODO(a.garipov): Enable for all.
-run_linter fieldalignment ./fastip/...
-run_linter fieldalignment ./internal/...
-run_linter fieldalignment ./proxyutil/...
-run_linter fieldalignment ./upstream/...
+run_linter fieldalignment ./...
 
 run_linter -e shadow --strict ./...
 

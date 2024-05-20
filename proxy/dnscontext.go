@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/AdguardTeam/dnsproxy/upstream"
-	"github.com/AdguardTeam/golibs/mathutil"
 	"github.com/ameshkov/dnscrypt/v2"
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
@@ -24,11 +23,8 @@ type DNSContext struct {
 	QUICConnection quic.Connection
 
 	// QUICStream is the QUIC stream from which we got the query.  For
-	// ProtoQUIC only.
+	// [ProtoQUIC] only.
 	QUICStream quic.Stream
-
-	// Addr is the address of the client.
-	Addr netip.AddrPort
 
 	// Upstream is the upstream that resolved the request.  In case of cached
 	// response it's nil.
@@ -62,8 +58,16 @@ type DNSContext struct {
 	// cached with.  It's empty for responses resolved by the upstream server.
 	CachedUpstreamAddr string
 
+	// RequestedPrivateRDNS is the subnet extracted from the ARPA domain of
+	// request's question if it's a PTR, SOA, or NS query for a private IP
+	// address.  It can be a single-address subnet as well as a zero-length one.
+	RequestedPrivateRDNS netip.Prefix
+
 	// localIP - local IP address (for UDP socket to call udpMakeOOBWithSrc)
 	localIP netip.Addr
+
+	// Addr is the address of the client.
+	Addr netip.AddrPort
 
 	// QueryDuration is the duration of a successful query to an upstream
 	// server or, if the upstream server is unavailable, to a fallback server.
@@ -83,12 +87,33 @@ type DNSContext struct {
 	// or default otherwise.
 	udpSize uint16
 
+	// IsPrivateClient is true if the client's address is considered private
+	// according to the configured private subnet set.
+	IsPrivateClient bool
+
 	// adBit is the authenticated data flag from the request.
 	adBit bool
+
 	// hasEDNS0 reflects if the request has EDNS0 RRs.
 	hasEDNS0 bool
+
 	// doBit is the DNSSEC OK flag from request's EDNS0 RR if presented.
 	doBit bool
+}
+
+// newDNSContext returns a new properly initialized *DNSContext.
+//
+// TODO(e.burkov):  Consider creating DNSContext with this everywhere, to
+// actually respect the contract of DNSContext.RequestID field.
+//
+// TODO(e.burkov):  Add remote address into arguments.
+func (p *Proxy) newDNSContext(proto Proto, req *dns.Msg) (d *DNSContext) {
+	return &DNSContext{
+		Proto: proto,
+		Req:   req,
+
+		RequestID: p.counter.Add(1),
+	}
 }
 
 // calcFlagsAndSize lazily calculates some values required for Resolve method.
@@ -124,14 +149,14 @@ func (dctx *DNSContext) scrub() {
 		dctx.Res.SetEdns0(dctx.udpSize, dctx.doBit)
 	}
 
-	dctx.Res.Truncate(dnsSize(dctx.Proto == ProtoUDP, dctx.Req))
+	dctx.Res.Truncate(int(dnsSize(dctx.Proto == ProtoUDP, dctx.Req)))
 	// Some devices require DNS message compression.
 	dctx.Res.Compress = true
 }
 
 // dnsSize returns the buffer size advertised in the requests OPT record.  When
 // the request is over TCP, it returns the maximum allowed size of 64KiB.
-func dnsSize(isUDP bool, r *dns.Msg) (size int) {
+func dnsSize(isUDP bool, r *dns.Msg) (size uint16) {
 	if !isUDP {
 		return dns.MaxMsgSize
 	}
@@ -141,7 +166,7 @@ func dnsSize(isUDP bool, r *dns.Msg) (size int) {
 		size16 = o.UDPSize()
 	}
 
-	return int(mathutil.Max(dns.MinMsgSize, size16))
+	return max(dns.MinMsgSize, size16)
 }
 
 // DoQVersion is an enumeration with supported DoQ versions.

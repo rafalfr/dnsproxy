@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"net"
 	"net/netip"
 	"testing"
@@ -13,15 +14,21 @@ import (
 )
 
 func TestProxy_IsBogusNXDomain(t *testing.T) {
-	prx := createTestProxy(t, nil)
-	prx.CacheEnabled = true
-
-	prx.BogusNXDomain = []netip.Prefix{
-		netip.MustParsePrefix("4.3.2.1/24"),
-		netip.MustParsePrefix("1.2.3.4/8"),
-		netip.MustParsePrefix("10.11.12.13/32"),
-		netip.MustParsePrefix("102:304:506:708:90a:b0c:d0e:f10/120"),
-	}
+	prx := mustNew(t, &Config{
+		UDPListenAddr:          []*net.UDPAddr{net.UDPAddrFromAddrPort(localhostAnyPort)},
+		TCPListenAddr:          []*net.TCPAddr{net.TCPAddrFromAddrPort(localhostAnyPort)},
+		UpstreamConfig:         newTestUpstreamConfig(t, defaultTimeout, testDefaultUpstreamAddr),
+		TrustedProxies:         defaultTrustedProxies,
+		RatelimitSubnetLenIPv4: 24,
+		RatelimitSubnetLenIPv6: 64,
+		CacheEnabled:           true,
+		BogusNXDomain: []netip.Prefix{
+			netip.MustParsePrefix("4.3.2.1/24"),
+			netip.MustParsePrefix("1.2.3.4/8"),
+			netip.MustParsePrefix("10.11.12.13/32"),
+			netip.MustParsePrefix("102:304:506:708:90a:b0c:d0e:f10/120"),
+		},
+	})
 
 	testCases := []struct {
 		name      string
@@ -74,12 +81,13 @@ func TestProxy_IsBogusNXDomain(t *testing.T) {
 	u := testUpstream{}
 	prx.UpstreamConfig.Upstreams = []upstream.Upstream{&u}
 
-	err := prx.Start()
+	ctx := context.Background()
+	err := prx.Start(ctx)
 	require.NoError(t, err)
-	testutil.CleanupAndRequireSuccess(t, prx.Stop)
+	testutil.CleanupAndRequireSuccess(t, func() (err error) { return prx.Shutdown(ctx) })
 
 	d := &DNSContext{
-		Req: createHostTestMessage("host"),
+		Req: newHostTestMessage("host"),
 	}
 
 	for _, tc := range testCases {
@@ -91,62 +99,6 @@ func TestProxy_IsBogusNXDomain(t *testing.T) {
 			require.NotNil(t, d.Res)
 
 			assert.Equal(t, tc.wantRcode, d.Res.Rcode)
-		})
-	}
-}
-
-func TestContainsIP(t *testing.T) {
-	nets := []netip.Prefix{
-		netip.MustParsePrefix("1.2.3.0/24"),
-		netip.MustParsePrefix("ffff::1.2.4.0/112"),
-		netip.MustParsePrefix("102:304:506:708:90a:b0c:d0e:f00/120"),
-	}
-
-	testCases := []struct {
-		want assert.BoolAssertionFunc
-		ip   netip.Addr
-		name string
-	}{{
-		name: "ipv4_yes",
-		want: assert.True,
-		ip:   netip.MustParseAddr("1.2.3.255"),
-	}, {
-		name: "ipv4_6_yes",
-		want: assert.True,
-		ip:   netip.MustParseAddr("ffff::1.2.4.254"),
-	}, {
-		name: "ipv6_yes",
-		want: assert.True,
-		ip:   netip.MustParseAddr("102:304:506:708:90a:b0c:d0e:f0f"),
-	}, {
-		name: "ipv6_4_yes",
-		want: assert.True,
-		ip:   netip.MustParseAddr("ffff::1.2.3.0"),
-	}, {
-		name: "ipv4_no",
-		want: assert.False,
-		ip:   netip.MustParseAddr("2.1.3.255"),
-	}, {
-		name: "ipv4_6_no",
-		want: assert.False,
-		ip:   netip.MustParseAddr("2.1.4.254"),
-	}, {
-		name: "ipv6_no",
-		want: assert.False,
-		ip:   netip.MustParseAddr("102:304:506:708:90a:b0c:d0e:10f"),
-	}, {
-		name: "ipv6_4_no",
-		want: assert.False,
-		ip:   netip.MustParseAddr("ffff::2.1.4.0"),
-	}, {
-		name: "invalid",
-		want: assert.False,
-		ip:   netip.Addr{},
-	}}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			tc.want(t, containsIP(nets, tc.ip))
 		})
 	}
 }

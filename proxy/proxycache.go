@@ -2,9 +2,9 @@ package proxy
 
 import (
 	"net"
+	"slices"
 
 	"github.com/AdguardTeam/golibs/log"
-	"golang.org/x/exp/slices"
 )
 
 // cacheForContext returns cache object for the given context.
@@ -61,6 +61,7 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 			// It is only read inside the optimistic resolver.
 			CustomUpstreamConfig: d.CustomUpstreamConfig,
 			ReqECS:               cloneIPNet(d.ReqECS),
+			IsPrivateClient:      d.IsPrivateClient,
 		}
 		if d.Req != nil {
 			minCtxClone.Req = d.Req.Copy()
