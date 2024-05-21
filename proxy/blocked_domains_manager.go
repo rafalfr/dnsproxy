@@ -7,7 +7,7 @@ import (
 	"github.com/AdguardTeam/dnsproxy/utils"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/barweiss/go-tuple"
-	. "github.com/golang-collections/collections/set"
+	"github.com/golang-collections/collections/set"
 	"io"
 	"os"
 	"path/filepath"
@@ -31,7 +31,7 @@ var Bdm = newBlockedDomainsManger()
 
 // BlockedDomainsManager is a class that manages blocked domains.
 type BlockedDomainsManager struct {
-	hosts             map[string]*Set
+	hosts             map[string]*set.Set
 	domainToListIndex map[string]int
 	blockedLists      []string
 	numDomains        int
@@ -43,7 +43,7 @@ func newBlockedDomainsManger() *BlockedDomainsManager {
 	p := BlockedDomainsManager{}
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	p.hosts = make(map[string]*Set)
+	p.hosts = make(map[string]*set.Set)
 	p.domainToListIndex = make(map[string]int)
 	p.blockedLists = make([]string, 0)
 	p.numDomains = 0
@@ -59,7 +59,7 @@ func (r *BlockedDomainsManager) addDomain(domain tuple.T2[string, string]) {
 
 	_, ok := r.hosts[domainItems[0]]
 	if !ok {
-		r.hosts[domainItems[0]] = New()
+		r.hosts[domainItems[0]] = set.New()
 	}
 
 	if !r.hosts[domainItems[0]].Has(domain.V1) {

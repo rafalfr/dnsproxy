@@ -590,33 +590,18 @@ func (p *Proxy) selectUpstreams(d *DNSContext) (upstreams []upstream.Upstream, i
 	}
 
 	// Use configured.
-	return getUpstreams(p.UpstreamConfig, host), false
+	upstreams = getUpstreams(p.UpstreamConfig, host)
+
+	// TODO (rafal): use random upstream server if flag in configuration set
+	//////////////////////////////////////////////////////////////////////////
+	if upstreams != nil && len(upstreams) > 0 {
+		randomIndex, _ := utils.GetRandomValue(0, int64(len(upstreams)))
+		upstreams = upstreams[randomIndex : randomIndex+1]
+	}
+	////////////////////////////////////////////////////////////////////////
+
+	return upstreams, false
 }
-		// Use configured.
-		upstreams = getUpstreams(p.UpstreamConfig, host)
-
-		// TODO (rafal): use random upstream server if flag in configuration set
-		//////////////////////////////////////////////////////////////////////////
-		if upstreams != nil && len(upstreams) > 0 {
-			randomIndex, _ := utils.GetRandomValue(0, int64(len(upstreams)))
-			upstreams = upstreams[randomIndex : randomIndex+1]
-		}
-		////////////////////////////////////////////////////////////////////////
-
-		return upstreams
-	}
-
-	// Use private upstreams.
-	private := p.PrivateRDNSUpstreamConfig
-	if private == nil {
-		return nil
-	}
-
-	// TODO(e.burkov):  Detect against the actual configured subnet set.
-	// Perhaps, even much earlier.
-	if !netutil.IsLocallyServed(d.Addr.Addr()) {
-		return nil
-	}
 
 // replyFromUpstream tries to resolve the request via configured upstream
 // servers.  It returns true if the response actually came from an upstream.
@@ -644,37 +629,34 @@ func (p *Proxy) replyFromUpstream(d *DNSContext) (ok bool, err error) {
 	} else if p.isBogusNXDomain(resp) {
 		log.Debug("dnsproxy: replying from upstream: response contains bogus-nxdomain ip")
 		resp = p.messages.NewMsgNXDOMAIN(req)
-		// rafal
-		//log.Debug("proxy: replying from upstream: response contains bogus-nxdomain ip")
-		resp = p.genWithRCode(req, dns.RcodeNameError)
 	}
 
 	if err != nil && !isPrivate && p.Fallbacks != nil {
 		log.Debug("dnsproxy: replying from upstream: using fallback due to %s", err)
-	if err != nil && p.Fallbacks != nil {
-		// rafal
-		//log.Debug("proxy: replying from upstream: using fallback due to %s", err)
+		if err != nil && p.Fallbacks != nil {
+			// rafal
+			//log.Debug("proxy: replying from upstream: using fallback due to %s", err)
 
-		// Reset the timer.
-		start = time.Now()
-		//src = "fallback"	// rafal
+			// Reset the timer.
+			start = time.Now()
+			//src = "fallback"	// rafal
 
-		// upstreams mustn't appear empty since they have been validated when
-		// creating proxy.
-		upstreams = p.Fallbacks.getUpstreamsForDomain(req.Question[0].Name)
+			// upstreams mustn't appear empty since they have been validated when
+			// creating proxy.
+			upstreams = p.Fallbacks.getUpstreamsForDomain(req.Question[0].Name)
 
-		resp, u, err = upstream.ExchangeParallel(upstreams, req)
+			resp, u, err = upstream.ExchangeParallel(upstreams, req)
+		}
 	}
 
 	if err != nil {
-		log.Debug("dnsproxy: replying from %s: %s", src, err)
 		// rafal
 		//log.Debug("proxy: replying from %s: %s", src, err)
 	}
 
 	if resp != nil {
 		d.QueryDuration = time.Since(start)
-		log.Debug("dnsproxy: replying from %s: rtt is %s", src, d.QueryDuration)
+		//log.Debug("dnsproxy: replying from %s: rtt is %s", src, d.QueryDuration)
 		rtt := time.Since(start)
 		// rafal
 		//log.Debug("proxy: replying from %s: rtt is %s", src, rtt)

@@ -102,8 +102,8 @@ func (p *Proxy) startListeners(ctx context.Context) error {
 // d is left without a response as the documentation to [BeforeRequestHandler]
 // says, and if it's ratelimited.
 func (p *Proxy) handleDNSRequest(d *DNSContext) (err error) {
-// handleDNSRequest processes the incoming packet bytes and returns with an optional response packet.
-func (p *Proxy) handleDNSRequest(d *DNSContext) error {
+	// handleDNSRequest processes the incoming packet bytes and returns with an optional response packet.
+
 	// rafal
 	p.mylogDNSMessage(d, "req")
 	// end rafal
@@ -111,9 +111,7 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 	p.logDNSMessage(d.Req)
 
 	if d.Req.Response {
-		log.Debug("dnsproxy: dropping incoming response packet from %s", d.Addr)
-
-		//log.Debug("Dropping incoming Reply packet from %s", d.Addr.String())
+		//log.Debug("dnsproxy: dropping incoming response packet from %s", d.Addr)
 		return nil
 	}
 
@@ -147,7 +145,9 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 	// rafal
 	p.mylogDNSMessage(d, "res")
 	// end rafal
+
 	p.logDNSMessage(d.Res)
+
 	p.respond(d)
 
 	return err
@@ -267,6 +267,7 @@ func (p *Proxy) logDNSMessage(m *dns.Msg) {
 // //////////////////////////////////////////////////////////////////////////////
 func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 	var m *dns.Msg
+
 	if messageType == "req" {
 		m = d.Req
 	}

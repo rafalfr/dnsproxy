@@ -8,6 +8,7 @@ import (
 	"github.com/ameshkov/dnscrypt/v2"
 	"github.com/barweiss/go-tuple"
 	"github.com/gin-gonic/gin"
+	"github.com/go-co-op/gocron"
 	"gopkg.in/yaml.v3"
 	"net"
 	"net/http"
@@ -29,9 +30,7 @@ import (
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/osutil"
 	"github.com/AdguardTeam/golibs/timeutil"
-	"github.com/ameshkov/dnscrypt/v2"
 	goFlags "github.com/jessevdk/go-flags"
-	"gopkg.in/yaml.v3"
 )
 
 // Options represents console arguments.  For further additions, please do not
@@ -302,18 +301,14 @@ func run(options *Options) {
 		dnsProxy.RequestHandler = ipv6Configuration.handleDNSRequest
 	}
 
-	// Start the proxy server.
-	//
-	// TODO(e.burkov):  Use signal handler.
-	ctx := context.Background()
-
-	err = dnsProxy.Start(ctx)
 	// rafal code
 	///////////////////////////////////////////////////////////////////////////////
 	proxy.SM.LoadStats("stats.json")
 
 	dnsProxy.PreferIPv6 = false
-	err := dnsProxy.Start()
+	ctx := context.Background()
+
+	err = dnsProxy.Start(ctx)
 	if err != nil {
 		log.Fatalf("cannot start the DNS proxy due to %s", err)
 	}
