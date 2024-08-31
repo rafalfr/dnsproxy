@@ -54,7 +54,7 @@ upstream:
   - "https://dns.artikel10.org/dns-query"
   - "https://doh.opendns.com/dns-query"
   - "https://sky.rethinkdns.com/1:AAkACAQA"
-  - "https://dns.dnswarden.com/uncensored"
+  #- "https://dns.dnswarden.com/uncensored"
   - "https://secure.avastdns.com/dns-query"
   - "[/google.pl/]https://dns.google/dns-query"
   - "[/google.com/]https://dns.google/dns-query"
