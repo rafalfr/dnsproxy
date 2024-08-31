@@ -97,6 +97,7 @@ domains_excluded_from_blocking:
     - "*.freeddns.org"
     - "*.dns.google"
     - "*.imx.to"
+    - "*dnswarden.com"
 domains_excluded_from_caching:
     - "*.freeddns.org"
 stats_port: 9999
