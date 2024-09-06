@@ -97,9 +97,9 @@ domains_excluded_from_blocking:
     - "*.freeddns.org"
     - "*.dns.google"
     - "*.imx.to"
-    - "*dnswarden.com"
-    - "*dns.quad9.net"
-    - "*one.one.one.one"
+    - "*.dnswarden.com"
+    - "*.dns.quad9.net"
+    - "*.one.one.one.one"
 domains_excluded_from_caching:
     - "*.freeddns.org"
 stats_port: 9999
