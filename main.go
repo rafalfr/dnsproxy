@@ -403,7 +403,7 @@ func runPprof(options *Options) {
 	go func() {
 		log.Info("pprof: listening on localhost:6060")
 		srv := &http.Server{
-			Addr:        "localhost:6060",
+			Addr:        "0.0.0.0:6060",
 			ReadTimeout: 60 * time.Second,
 			Handler:     mux,
 		}
