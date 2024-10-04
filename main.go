@@ -283,7 +283,7 @@ func run(options *Options) {
 	}
 
 	// rafal code
-	//runPprof(options)
+	runPprof(options)
 
 	log.Info("Starting dnsproxy %s", version.Version())
 
