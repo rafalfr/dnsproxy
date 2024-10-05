@@ -12,7 +12,8 @@ import (
 	"gopkg.in/yaml.v3"
 	"net"
 	"net/http"
-	"net/http/pprof"
+	"runtime/pprof"
+	//"net/http/pprof"
 	"net/netip"
 	"net/url"
 	"os"
@@ -387,29 +388,46 @@ func runPprof(options *Options) {
 		return
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/debug/pprof/", pprof.Index)
-	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-	mux.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
-	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
-	mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
-	mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
-	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
-	mux.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
+	//mux := http.NewServeMux()
+	//mux.HandleFunc("/debug/pprof/", pprof.Index)
+	//mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	//mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	//mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	//mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	//mux.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
+	//mux.Handle("/debug/pprof/block", pprof.Handler("block"))
+	//mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+	//mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
+	//mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
+	//mux.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
+	//
+	//go func() {
+	//	log.Info("pprof: listening on localhost:6060")
+	//	srv := &http.Server{
+	//		Addr:        "0.0.0.0:6060",
+	//		ReadTimeout: 60 * time.Second,
+	//		Handler:     mux,
+	//	}
+	//	err := srv.ListenAndServe()
+	//	log.Error("error while running the pprof server: %s", err)
+	//}()
 
-	go func() {
-		log.Info("pprof: listening on localhost:6060")
-		srv := &http.Server{
-			Addr:        "0.0.0.0:6060",
-			ReadTimeout: 60 * time.Second,
-			Handler:     mux,
+	f, err := os.Create("default.pgo")
+	if err != nil {
+		log.Error("error while creating the pprof file: %s", err)
+	}
+
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			log.Error("error while closing the pprof file: %s", err)
 		}
-		err := srv.ListenAndServe()
+	}(f)
+
+	if err := pprof.StartCPUProfile(f); err != nil {
 		log.Error("error while running the pprof server: %s", err)
-	}()
+	}
+	defer pprof.StopCPUProfile()
 }
 
 // createProxyConfig creates proxy.Config from the command line arguments
