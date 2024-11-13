@@ -10,6 +10,8 @@
 # https://github.com/DNSCrypt/dnscrypt-resolvers/blob/master/v3/public-resolvers.md
 # https://github.com/nickspaargaren/no-google/blob/master/google-domains
 # https://www.dnscry.pt/public-resolvers/
+# https://adguard-dns.io/kb/general/dns-providers/
+# https://www.reddit.com/r/degoogle/comments/129n87v/is_there_any_secured_dns_address_available_for/
 
 # https://github.com/FiloSottile/mkcert
 # https://deliciousbrains.com/ssl-certificate-authority-for-local-https-development/
@@ -43,7 +45,7 @@ upstream:
   - "quic://zero.dns0.eu"
   - "tls://private.canadianshield.cira.ca"
   - "tls://dot1.applied-privacy.net"
-  - "tls://kaitain.restena.lu"
+  - "tls://dnspub.restena.lu"
   - "tls://dns3.digitalcourage.de"
   - "tls://dns.digitale-gesellschaft.ch"
   - "https://dns.mullvad.net/dns-query"
@@ -78,9 +80,8 @@ blocked_domains_lists:
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/gambling.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/doh-vpn-proxy-bypass.txt"
 fallback:
-    - "quic://x-hagezi-ultimate.freedns.controld.com"
-    - "https://freedns.controld.com/no-ads-malware-typo"
-    - "tls://dns-dot-no-safe-search.dnsforfamily.com"
+    - "https://dns.quad9.net/dns-query"
+    - "https://one.one.one.one/dns-query"
 domains_excluded_from_blocking:
     - "*.wordpress.com"
     - "*.blogspot.com"
