@@ -48,7 +48,8 @@ Usage:
   dnsproxy [OPTIONS]
 
 Application Options:
-      --config-path=               yaml configuration file. Minimal working configuration in config.yaml.dist. Options passed through command line will override the ones from this file.
+      --config-path=               yaml configuration file. Minimal working configuration in config.yaml.dist. Options passed through command
+                                   line will override the ones from this file.
   -o, --output=                    Path to the log file. If not set, write to stdout.
   -c, --tls-crt=                   Path to a file with the certificate chain
   -k, --tls-key=                   Path to a file with the private key
@@ -56,21 +57,29 @@ Application Options:
       --https-userinfo=            If set, all DoH queries are required to have this basic authentication information.
   -g, --dnscrypt-config=           Path to a file with DNSCrypt configuration. You can generate one using https://github.com/ameshkov/dnscrypt
       --edns-addr=                 Send EDNS Client Address
+      --upstream-mode=             Defines the upstreams logic mode, possible values: load_balance, parallel, fastest_addr (default:
+                                   load_balance)
   -l, --listen=                    Listening addresses
   -p, --port=                      Listening ports. Zero value disables TCP and UDP listeners
   -s, --https-port=                Listening ports for DNS-over-HTTPS
   -t, --tls-port=                  Listening ports for DNS-over-TLS
   -q, --quic-port=                 Listening ports for DNS-over-QUIC
   -y, --dnscrypt-port=             Listening ports for DNSCrypt
-  -u, --upstream=                  An upstream to be used (can be specified multiple times). You can also specify path to a file with the list of servers
+  -u, --upstream=                  An upstream to be used (can be specified multiple times). You can also specify path to a file with the
+                                   list of servers
   -b, --bootstrap=                 Bootstrap DNS for DoH and DoT, can be specified multiple times (default: use system-provided)
-  -f, --fallback=                  Fallback resolvers to use when regular ones are unavailable, can be specified multiple times. You can also specify path to a file with the list of servers
+  -f, --fallback=                  Fallback resolvers to use when regular ones are unavailable, can be specified multiple times. You can also
+                                   specify path to a file with the list of servers
       --private-rdns-upstream=     Private DNS upstreams to use for reverse DNS lookups of private addresses, can be specified multiple times
-      --dns64-prefix=              Prefix used to handle DNS64. If not specified, dnsproxy uses the 'Well-Known Prefix' 64:ff9b::.  Can be specified multiple times
+      --dns64-prefix=              Prefix used to handle DNS64. If not specified, dnsproxy uses the 'Well-Known Prefix' 64:ff9b::.  Can be
+                                   specified multiple times
       --private-subnets=           Private subnets to use for reverse DNS lookups of private addresses
-      --bogus-nxdomain=            Transform the responses containing at least a single IP that matches specified addresses and CIDRs into NXDOMAIN.  Can be specified multiple times.
+      --bogus-nxdomain=            Transform the responses containing at least a single IP that matches specified addresses and CIDRs into
+                                   NXDOMAIN.  Can be specified multiple times.
+      --hosts-files=               List of paths to the hosts files relative to the root, can be specified multiple times
       --timeout=                   Timeout for outbound DNS queries to remote upstream servers in a human-readable form (default: 10s)
-      --cache-min-ttl=             Minimum TTL value for DNS entries, in seconds. Capped at 3600. Artificially extending TTLs should only be done with careful consideration.
+      --cache-min-ttl=             Minimum TTL value for DNS entries, in seconds. Capped at 3600. Artificially extending TTLs should only be
+                                   done with careful consideration.
       --cache-max-ttl=             Maximum TTL value for DNS entries, in seconds.
       --cache-size=                Cache size (in bytes). Default: 64k
   -r, --ratelimit=                 Ratelimit (requests per second)
@@ -86,14 +95,13 @@ Application Options:
       --insecure                   Disable secure TLS certificate validation
       --ipv6-disabled              If specified, all AAAA requests will be replied with NoError RCode and empty answer
       --http3                      Enable HTTP/3 support
-      --all-servers                If specified, parallel queries to all configured upstream servers are enabled
-      --fastest-addr               Respond to A or AAAA requests only with the fastest IP address
       --cache-optimistic           If specified, optimistic DNS cache is enabled
       --cache                      If specified, DNS cache is enabled
       --refuse-any                 If specified, refuse ANY requests
       --edns                       Use EDNS Client Subnet extension
       --dns64                      If specified, dnsproxy will act as a DNS64 server
       --use-private-rdns           If specified, use private upstreams for reverse DNS lookups of private addresses
+      --hosts-file-enabled=        If specified, use hosts files for resolving (default: true)
 
 Help Options:
   -h, --help                       Show this help message
@@ -222,7 +230,7 @@ Runs a DNS proxy on `0.0.0.0:53` with rate limit set to `10 rps`, enabled DNS ca
 
 Runs a DNS proxy on 127.0.0.1:5353 with multiple upstreams and enable parallel queries to all configured upstream servers.
 ```shell
-./dnsproxy -l 127.0.0.1 -p 5353 -u 8.8.8.8:53 -u 1.1.1.1:53 -u tls://dns.adguard.com --all-servers
+./dnsproxy -l 127.0.0.1 -p 5353 -u 8.8.8.8:53 -u 1.1.1.1:53 -u tls://dns.adguard.com --upstream-mode parallel
 ```
 
 Loads upstreams list from a file.
@@ -267,17 +275,19 @@ specified and enabled if DNS64 is enabled.
 ### Fastest addr + cache-min-ttl
 
 This option would be useful to the users with problematic network connection.
-In this mode, `dnsproxy` would detect the fastest IP address among all that were returned,
-and it will return only it.
+In this mode, `dnsproxy` would detect the fastest IP address among all that were
+returned, and it will return only it.
 
-Additionally, for those with problematic network connection, it makes sense to override `cache-min-ttl`.
-In this case, `dnsproxy` will make sure that DNS responses are cached for at least the specified amount of time.
+Additionally, for those with problematic network connection, it makes sense to
+override `cache-min-ttl`.  In this case, `dnsproxy` will make sure that DNS
+responses are cached for at least the specified amount of time.
 
 It makes sense to run it with multiple upstream servers only.
 
-Run a DNS proxy with two upstreams, min-TTL set to 10 minutes, fastest address detection is enabled:
+Run a DNS proxy with two upstreams, min-TTL set to 10 minutes, fastest address
+detection is enabled:
 ```
-./dnsproxy -u 8.8.8.8 -u 1.1.1.1 --cache --cache-min-ttl=600 --fastest-addr
+./dnsproxy -u 8.8.8.8 -u 1.1.1.1 --cache --cache-min-ttl=600 --upstream-mode=fastest_addr
 ```
 
  who run `dnsproxy` with multiple upstreams

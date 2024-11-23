@@ -32,7 +32,7 @@ bootstrap:
 listen-addrs:
   - "0.0.0.0"
 listen-ports:
-  - 53
+  - 53000
 max-go-routines: 20
 ratelimit: 0
 http3: true
@@ -71,7 +71,7 @@ timeout: '10s'
 cache: true
 cache-optimistic: true
 cache-size: 4194304
-ipv6-disabled: true
+ipv6-disabled: false
 blocked_domains_lists:
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/tif.txt"
   - "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/ultimate.txt"
@@ -104,11 +104,11 @@ domains_excluded_from_blocking:
 domains_excluded_from_caching:
     - "*.freeddns.org"
 stats_port: 9999
-tls-port:
-  - 853
-quic-port:
-  - 853
-tls-crt: "rfdns.freeddns.org.crt"
-tls-key: "rfdns.freeddns.org.key"
+#tls-port:
+#  - 853
+#quic-port:
+#  - 853
+#tls-crt: "rfdns.freeddns.org.crt"
+#tls-key: "rfdns.freeddns.org.key"
 insecure: true
-output: "/tmp/dnsproxy.log"
+output: "dnsproxy.log"

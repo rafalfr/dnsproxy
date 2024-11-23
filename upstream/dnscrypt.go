@@ -3,13 +3,13 @@ package upstream
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/AdguardTeam/golibs/errors"
-	"github.com/AdguardTeam/golibs/log"
 	"github.com/ameshkov/dnscrypt/v2"
 	"github.com/miekg/dns"
 )
@@ -28,6 +28,9 @@ type dnsCrypt struct {
 	// addr is the DNSCrypt server URL.
 	addr *url.URL
 
+	// logger is used for exchange logging.  It is never nil.
+	logger *slog.Logger
+
 	// verifyCert is a callback that verifies the resolver's certificate.
 	verifyCert func(cert *dnscrypt.Cert) (err error)
 
@@ -40,6 +43,7 @@ func newDNSCrypt(addr *url.URL, opts *Options) (u *dnsCrypt) {
 	return &dnsCrypt{
 		mu:         &sync.RWMutex{},
 		addr:       addr,
+		logger:     opts.Logger,
 		verifyCert: opts.VerifyDNSCryptCertificate,
 		timeout:    opts.Timeout,
 	}
@@ -52,8 +56,8 @@ var _ Upstream = (*dnsCrypt)(nil)
 func (p *dnsCrypt) Address() string { return p.addr.String() }
 
 // Exchange implements the [Upstream] interface for *dnsCrypt.
-func (p *dnsCrypt) Exchange(m *dns.Msg) (resp *dns.Msg, err error) {
-	resp, err = p.exchangeDNSCrypt(m)
+func (p *dnsCrypt) Exchange(req *dns.Msg) (resp *dns.Msg, err error) {
+	resp, err = p.exchangeDNSCrypt(req)
 	if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, io.EOF) {
 		// If request times out, it is possible that the server configuration
 		// has been changed.  It is safe to assume that the key was rotated, see
@@ -64,7 +68,7 @@ func (p *dnsCrypt) Exchange(m *dns.Msg) (resp *dns.Msg, err error) {
 			return nil, err
 		}
 
-		return p.exchangeDNSCrypt(m)
+		return p.exchangeDNSCrypt(req)
 	}
 
 	return resp, err
@@ -76,7 +80,7 @@ func (p *dnsCrypt) Close() (err error) {
 }
 
 // exchangeDNSCrypt attempts to send the DNS query and returns the response.
-func (p *dnsCrypt) exchangeDNSCrypt(m *dns.Msg) (resp *dns.Msg, err error) {
+func (p *dnsCrypt) exchangeDNSCrypt(req *dns.Msg) (resp *dns.Msg, err error) {
 	var client *dnscrypt.Client
 	var resolverInfo *dnscrypt.ResolverInfo
 	func() {
@@ -104,15 +108,19 @@ func (p *dnsCrypt) exchangeDNSCrypt(m *dns.Msg) (resp *dns.Msg, err error) {
 		// Go on.
 	}
 
-	resp, err = client.Exchange(m, resolverInfo)
+	resp, err = client.Exchange(req, resolverInfo)
 	if resp != nil && resp.Truncated {
-		q := &m.Question[0]
-		log.Debug("dnscrypt %s: received truncated, falling back to tcp with %s", p.addr, q)
+		q := &req.Question[0]
+		p.logger.Debug(
+			"dnscrypt received truncated, falling back to tcp",
+			"addr", p.addr,
+			"question", q,
+		)
 
 		tcpClient := &dnscrypt.Client{Timeout: p.timeout, Net: networkTCP}
-		resp, err = tcpClient.Exchange(m, resolverInfo)
+		resp, err = tcpClient.Exchange(req, resolverInfo)
 	}
-	if err == nil && resp != nil && resp.Id != m.Id {
+	if err == nil && resp != nil && resp.Id != req.Id {
 		err = dns.ErrId
 	}
 

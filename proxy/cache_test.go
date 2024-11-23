@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AdguardTeam/dnsproxy/upstream"
+	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/testutil"
 	"github.com/stretchr/testify/assert"
@@ -31,6 +32,7 @@ var upstreamWithAddr = &fakeUpstream{
 
 func TestServeCached(t *testing.T) {
 	dnsProxy := mustNew(t, &Config{
+		Logger:                 slogutil.NewDiscardLogger(),
 		UDPListenAddr:          []*net.UDPAddr{net.UDPAddrFromAddrPort(localhostAnyPort)},
 		TCPListenAddr:          []*net.TCPAddr{net.TCPAddrFromAddrPort(localhostAnyPort)},
 		UpstreamConfig:         newTestUpstreamConfig(t, defaultTimeout, testDefaultUpstreamAddr),
@@ -55,11 +57,14 @@ func TestServeCached(t *testing.T) {
 	}).SetQuestion("google.com.", dns.TypeA)
 	reply.SetEdns0(defaultUDPBufSize, false)
 
-	dnsProxy.cache.set(reply, upstreamWithAddr)
+	dnsProxy.cache.set(reply, upstreamWithAddr, slogutil.NewDiscardLogger())
 
 	// Create a DNS-over-UDP client connection.
 	addr := dnsProxy.Addr(ProtoUDP)
-	client := &dns.Client{Net: "udp", Timeout: 500 * time.Millisecond}
+	client := &dns.Client{
+		Net:     string(ProtoUDP),
+		Timeout: testTimeout,
+	}
 
 	// Create a DNS request.
 	request := (&dns.Msg{}).SetQuestion("google.com.", dns.TypeA)
@@ -165,7 +170,7 @@ func TestCacheDO(t *testing.T) {
 	reply.SetEdns0(4096, true)
 
 	// Store in cache.
-	testCache.set(reply, upstreamWithAddr)
+	testCache.set(reply, upstreamWithAddr, slogutil.NewDiscardLogger())
 
 	// Make a request.
 	request := (&dns.Msg{}).SetQuestion("google.com.", dns.TypeA)
@@ -196,6 +201,8 @@ func TestCacheDO(t *testing.T) {
 }
 
 func TestCacheCNAME(t *testing.T) {
+	l := slogutil.NewDiscardLogger()
+
 	testCache := newCache(testCacheSize, false, false)
 
 	// Fill the cache
@@ -205,7 +212,7 @@ func TestCacheCNAME(t *testing.T) {
 		},
 		Answer: []dns.RR{newRR(t, "google.com.", dns.TypeCNAME, 3600, "test.google.com.")},
 	}).SetQuestion("google.com.", dns.TypeA)
-	testCache.set(reply, upstreamWithAddr)
+	testCache.set(reply, upstreamWithAddr, l)
 
 	// Create a DNS request.
 	request := (&dns.Msg{}).SetQuestion("google.com.", dns.TypeA)
@@ -218,7 +225,7 @@ func TestCacheCNAME(t *testing.T) {
 
 	// Now fill the cache with a cacheable CNAME response.
 	reply.Answer = append(reply.Answer, newRR(t, "google.com.", dns.TypeA, 3600, net.IP{8, 8, 8, 8}))
-	testCache.set(reply, upstreamWithAddr)
+	testCache.set(reply, upstreamWithAddr, l)
 
 	// We are testing that a proper CNAME response gets cached
 	t.Run("cnames_exist", func(t *testing.T) {
@@ -241,7 +248,7 @@ func TestCache_uncacheable(t *testing.T) {
 	reply := (&dns.Msg{}).SetRcode(request, dns.RcodeBadAlg)
 
 	// We are testing that SERVFAIL responses aren't cached
-	testCache.set(reply, upstreamWithAddr)
+	testCache.set(reply, upstreamWithAddr, slogutil.NewDiscardLogger())
 
 	r, expired, _ := testCache.get(request)
 	assert.Nil(t, r)
@@ -270,8 +277,19 @@ func TestCache_concurrent(t *testing.T) {
 	g.Wait()
 }
 
+const (
+	// cacheTick is a cache check period.
+	cacheTick = 100 * time.Millisecond
+
+	// cacheTimeout is the timeout of cache check.
+	cacheTimeout = 20 * cacheTick
+)
+
 func TestCacheExpiration(t *testing.T) {
+	t.Parallel()
+
 	dnsProxy := mustNew(t, &Config{
+		Logger:                 slogutil.NewDiscardLogger(),
 		UDPListenAddr:          []*net.UDPAddr{net.UDPAddrFromAddrPort(localhostAnyPort)},
 		TCPListenAddr:          []*net.TCPAddr{net.TCPAddrFromAddrPort(localhostAnyPort)},
 		UpstreamConfig:         newTestUpstreamConfig(t, defaultTimeout, testDefaultUpstreamAddr),
@@ -285,6 +303,8 @@ func TestCacheExpiration(t *testing.T) {
 	err := dnsProxy.Start(ctx)
 	require.NoError(t, err)
 	testutil.CleanupAndRequireSuccess(t, func() (err error) { return dnsProxy.Shutdown(ctx) })
+
+	l := slogutil.NewDiscardLogger()
 
 	// Create dns messages with TTL of 1 second.
 	rrs := []dns.RR{
@@ -300,7 +320,7 @@ func TestCacheExpiration(t *testing.T) {
 			},
 			Answer: []dns.RR{dns.Copy(rr)},
 		}).SetQuestion(rr.Header().Name, dns.TypeA)
-		dnsProxy.cache.set(rep, upstreamWithAddr)
+		dnsProxy.cache.set(rep, upstreamWithAddr, l)
 		replies[i] = rep
 	}
 
@@ -322,13 +342,14 @@ func TestCacheExpiration(t *testing.T) {
 		}
 
 		return true
-	}, 1100*time.Millisecond, 100*time.Millisecond)
+	}, cacheTimeout, cacheTick)
 }
 
 func TestCacheExpirationWithTTLOverride(t *testing.T) {
 	u := testUpstream{}
 
 	dnsProxy := mustNew(t, &Config{
+		Logger:        slogutil.NewDiscardLogger(),
 		UDPListenAddr: []*net.UDPAddr{net.UDPAddrFromAddrPort(localhostAnyPort)},
 		TCPListenAddr: []*net.TCPAddr{net.TCPAddrFromAddrPort(localhostAnyPort)},
 		UpstreamConfig: &UpstreamConfig{
@@ -512,6 +533,8 @@ func TestCache(t *testing.T) {
 }
 
 func (tests testCases) run(t *testing.T) {
+	l := slogutil.NewDiscardLogger()
+
 	testCache := newCache(testCacheSize, false, false)
 
 	for _, res := range tests.cache {
@@ -521,7 +544,7 @@ func (tests testCases) run(t *testing.T) {
 			},
 			Answer: res.a,
 		}).SetQuestion(res.q, res.t)
-		testCache.set(reply, upstreamWithAddr)
+		testCache.set(reply, upstreamWithAddr, l)
 	}
 
 	for _, tc := range tests.cases {
@@ -544,7 +567,7 @@ func (tests testCases) run(t *testing.T) {
 			Answer: tc.a,
 		}).SetQuestion(tc.q, tc.t)
 
-		testCache.set(reply, upstreamWithAddr)
+		testCache.set(reply, upstreamWithAddr, l)
 
 		requireEqualMsgs(t, ci.m, reply)
 	}
@@ -591,7 +614,7 @@ func setAndGetCache(t *testing.T, c *cache, g *sync.WaitGroup, host, ip string) 
 		Answer: []dns.RR{newRR(t, host, dns.TypeA, 1, ipAddr)},
 	}).SetQuestion(host, dns.TypeA)
 
-	c.set(dnsMsg, upstreamWithAddr)
+	c.set(dnsMsg, upstreamWithAddr, slogutil.NewDiscardLogger())
 
 	for range 2 {
 		ci, expired, key := c.get(dnsMsg)
@@ -607,7 +630,7 @@ func setAndGetCache(t *testing.T, c *cache, g *sync.WaitGroup, host, ip string) 
 		ci, _, _ := c.get(dnsMsg)
 
 		return ci == nil
-	}, 1100*time.Millisecond, 100*time.Millisecond, "cache for %s should already be removed", host)
+	}, cacheTimeout, cacheTick, "cache for %s should already be removed", host)
 }
 
 func TestCache_getWithSubnet(t *testing.T) {
@@ -617,6 +640,7 @@ func TestCache_getWithSubnet(t *testing.T) {
 	req := (&dns.Msg{}).SetQuestion(testFQDN, dns.TypeA)
 	mask16 := net.CIDRMask(16, netutil.IPv4BitLen)
 	mask24 := net.CIDRMask(24, netutil.IPv4BitLen)
+	l := slogutil.NewDiscardLogger()
 
 	c := newCache(testCacheSize, true, false)
 
@@ -630,7 +654,7 @@ func TestCache_getWithSubnet(t *testing.T) {
 	resp := (&dns.Msg{
 		Answer: []dns.RR{newRR(t, testFQDN, dns.TypeA, 1, net.IP{1, 1, 1, 1})},
 	}).SetReply(req)
-	c.setWithSubnet(resp, upstreamWithAddr, &net.IPNet{IP: ip1234, Mask: mask16})
+	c.setWithSubnet(resp, upstreamWithAddr, &net.IPNet{IP: ip1234, Mask: mask16}, slogutil.NewDiscardLogger())
 
 	t.Run("different_ip", func(t *testing.T) {
 		ci, expired, key := c.getWithSubnet(req, &net.IPNet{IP: ip2234, Mask: mask24})
@@ -643,13 +667,13 @@ func TestCache_getWithSubnet(t *testing.T) {
 	resp = (&dns.Msg{
 		Answer: []dns.RR{newRR(t, testFQDN, dns.TypeA, 1, net.IP{2, 2, 2, 2})},
 	}).SetReply(req)
-	c.setWithSubnet(resp, upstreamWithAddr, &net.IPNet{IP: ip2234, Mask: mask16})
+	c.setWithSubnet(resp, upstreamWithAddr, &net.IPNet{IP: ip2234, Mask: mask16}, l)
 
 	// Add a response entry without subnet.
 	resp = (&dns.Msg{
 		Answer: []dns.RR{newRR(t, testFQDN, dns.TypeA, 1, net.IP{3, 3, 3, 3})},
 	}).SetReply(req)
-	c.setWithSubnet(resp, upstreamWithAddr, &net.IPNet{IP: nil, Mask: nil})
+	c.setWithSubnet(resp, upstreamWithAddr, &net.IPNet{IP: nil, Mask: nil}, l)
 
 	t.Run("with_subnet_1", func(t *testing.T) {
 		ci, expired, key := c.getWithSubnet(req, &net.IPNet{IP: ip1234, Mask: mask24})
@@ -716,6 +740,7 @@ func TestCache_getWithSubnet_mask(t *testing.T) {
 		resp,
 		upstreamWithAddr,
 		&net.IPNet{IP: cachedIP, Mask: cidrMask},
+		slogutil.NewDiscardLogger(),
 	)
 
 	t.Run("mask_matched", func(t *testing.T) {
@@ -943,7 +968,7 @@ func TestCache_IsCacheable_negative(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.wantTTL, cacheTTL(tc.req))
+			assert.Equal(t, tc.wantTTL, cacheTTL(tc.req, slogutil.NewDiscardLogger()))
 		})
 	}
 }

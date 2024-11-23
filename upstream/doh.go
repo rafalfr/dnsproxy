@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -15,7 +16,8 @@ import (
 
 	"github.com/AdguardTeam/dnsproxy/internal/bootstrap"
 	"github.com/AdguardTeam/golibs/errors"
-	"github.com/AdguardTeam/golibs/log"
+	"github.com/AdguardTeam/golibs/httphdr"
+	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
@@ -62,6 +64,9 @@ type dnsOverHTTPS struct {
 
 	// clientMu protects client.
 	clientMu *sync.Mutex
+
+	// logger is used for exchange logging.  It is never nil.
+	logger *slog.Logger
 
 	// quicConf is the QUIC configuration that is used if HTTP/3 is enabled
 	// for this upstream.
@@ -115,6 +120,7 @@ func newDoH(addr *url.URL, opts *Options) (u Upstream, err error) {
 			VerifyConnection:      opts.VerifyConnection,
 		},
 		clientMu:     &sync.Mutex{},
+		logger:       opts.Logger,
 		addrRedacted: addr.Redacted(),
 		timeout:      opts.Timeout,
 	}
@@ -135,19 +141,21 @@ var _ Upstream = (*dnsOverHTTPS)(nil)
 // password, the password is replaced with "xxxxx".
 func (p *dnsOverHTTPS) Address() string { return p.addrRedacted }
 
-// Exchange implements the Upstream interface for *dnsOverHTTPS.
-func (p *dnsOverHTTPS) Exchange(m *dns.Msg) (resp *dns.Msg, err error) {
+// Exchange implements the [Upstream] interface for *dnsOverHTTPS.
+func (p *dnsOverHTTPS) Exchange(req *dns.Msg) (resp *dns.Msg, err error) {
+	// TODO(e.burkov):  Use some smarter cloning approach.
+	req = req.Copy()
+
 	// In order to maximize HTTP cache friendliness, DoH clients using media
-	// formats that include the ID field from the DNS message header, such
-	// as "application/dns-message", SHOULD use a DNS ID of 0 in every DNS
-	// request.
+	// formats that include the ID field from the DNS message header, such as
+	// "application/dns-message", SHOULD use a DNS ID of 0 in every DNS request.
 	//
 	// See https://www.rfc-editor.org/rfc/rfc8484.html.
-	id := m.Id
-	m.Id = 0
+	id := req.Id
+	req.Id = 0
 	defer func() {
 		// Restore the original ID to not break compatibility with proxies.
-		m.Id = id
+		req.Id = id
 		if resp != nil {
 			resp.Id = id
 		}
@@ -161,7 +169,7 @@ func (p *dnsOverHTTPS) Exchange(m *dns.Msg) (resp *dns.Msg, err error) {
 	}
 
 	// Make the first attempt to send the DNS query.
-	resp, err = p.exchangeHTTPS(client, m)
+	resp, err = p.exchangeHTTPS(client, req)
 
 	// Make up to 2 attempts to re-create the HTTP client and send the request
 	// again.  There are several cases (mostly, with QUIC) where this workaround
@@ -174,7 +182,7 @@ func (p *dnsOverHTTPS) Exchange(m *dns.Msg) (resp *dns.Msg, err error) {
 			return nil, fmt.Errorf("failed to reset http client: %w", err)
 		}
 
-		resp, err = p.exchangeHTTPS(client, m)
+		resp, err = p.exchangeHTTPS(client, req)
 	}
 
 	if err != nil {
@@ -219,8 +227,8 @@ func (p *dnsOverHTTPS) exchangeHTTPS(client *http.Client, req *dns.Msg) (resp *d
 		n = networkUDP
 	}
 
-	logBegin(p.addrRedacted, n, req)
-	defer func() { logFinish(p.addrRedacted, n, err) }()
+	logBegin(p.logger, p.addrRedacted, n, req)
+	defer func() { logFinish(p.logger, p.addrRedacted, n, err) }()
 
 	return p.exchangeHTTPSClient(client, req)
 }
@@ -261,14 +269,16 @@ func (p *dnsOverHTTPS) exchangeHTTPSClient(
 		return nil, fmt.Errorf("creating http request to %s: %w", p.addrRedacted, err)
 	}
 
-	httpReq.Header.Set("Accept", "application/dns-message")
-	httpReq.Header.Set("User-Agent", "")
+	// Prevent the client from sending User-Agent header, see
+	// https://github.com/AdguardTeam/dnsproxy/issues/211.
+	httpReq.Header.Set(httphdr.UserAgent, "")
+	httpReq.Header.Set(httphdr.Accept, "application/dns-message")
 
 	httpResp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("requesting %s: %w", p.addrRedacted, err)
 	}
-	defer log.OnCloserError(httpResp.Body, log.DEBUG)
+	defer slogutil.CloseAndLog(httpReq.Context(), p.logger, httpResp.Body, slog.LevelDebug)
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -342,11 +352,11 @@ func (p *dnsOverHTTPS) resetClient(resetErr error) (client *http.Client, err err
 	if oldClient != nil {
 		closeErr := p.closeClient(oldClient)
 		if closeErr != nil {
-			log.Info("warning: failed to close the old http client: %v", closeErr)
+			p.logger.Warn("failed to close the old http client", slogutil.KeyError, closeErr)
 		}
 	}
 
-	log.Debug("re-creating the http client due to %v", resetErr)
+	p.logger.Debug("recreating the http client", slogutil.KeyError, resetErr)
 	p.client, err = p.createClient()
 
 	return p.client, err
@@ -390,7 +400,7 @@ func (p *dnsOverHTTPS) getClient() (c *http.Client, isCached bool, err error) {
 		return nil, false, fmt.Errorf("timeout exceeded: %s", elapsed)
 	}
 
-	log.Debug("creating a new http client")
+	p.logger.Debug("creating a new http client")
 	p.client, err = p.createClient()
 
 	return p.client, false, err
@@ -437,11 +447,12 @@ func (p *dnsOverHTTPS) createTransport() (t http.RoundTripper, err error) {
 	tlsConf := p.tlsConf.Clone()
 	transportH3, err := p.createTransportH3(tlsConf, dialContext)
 	if err == nil {
-		log.Debug("using HTTP/3 for this upstream: QUIC was faster")
+		p.logger.Debug("using http/3 for this upstream, quic was faster")
+
 		return transportH3, nil
 	}
 
-	log.Debug("using HTTP/2 for this upstream: %v", err)
+	p.logger.Debug("got error, switching to http/2 for this upstream", slogutil.KeyError, err)
 
 	if !p.supportsHTTP() {
 		return nil, errors.Error("HTTP1/1 and HTTP2 are not supported by this upstream")
@@ -621,7 +632,8 @@ func (p *dnsOverHTTPS) probeH3(
 	case tlsErr := <-chTLS:
 		if tlsErr != nil {
 			// Return immediately, TLS failed.
-			log.Debug("probing TLS: %v", tlsErr)
+			p.logger.Debug("probing tls", slogutil.KeyError, tlsErr)
+
 			return addr, nil
 		}
 
@@ -653,7 +665,7 @@ func (p *dnsOverHTTPS) probeQUIC(addr string, tlsConfig *tls.Config, ch chan err
 	ch <- nil
 
 	elapsed := time.Since(startTime)
-	log.Debug("elapsed on establishing a QUIC connection: %s", elapsed)
+	p.logger.Debug("quic connection established", "elapsed", elapsed)
 }
 
 // probeTLS attempts to establish a TLS connection to the specified address. We
@@ -673,7 +685,7 @@ func (p *dnsOverHTTPS) probeTLS(dialContext bootstrap.DialHandler, tlsConfig *tl
 	ch <- nil
 
 	elapsed := time.Since(startTime)
-	log.Debug("elapsed on establishing a TLS connection: %s", elapsed)
+	p.logger.Debug("tls connection established", "elapsed", elapsed)
 }
 
 // supportsH3 returns true if HTTP/3 is supported by this upstream.

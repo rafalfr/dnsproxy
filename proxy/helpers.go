@@ -3,36 +3,18 @@ package proxy
 import (
 	"net"
 
-	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/miekg/dns"
 )
 
-const retryNoError = 60 // Retry time for NoError SOA
-
-// CheckDisabledAAAARequest checks if AAAA requests should be disabled or not and sets NoError empty response to given DNSContext if needed
-func CheckDisabledAAAARequest(ctx *DNSContext, ipv6Disabled bool) bool {
-	if ipv6Disabled && ctx.Req.Question[0].Qtype == dns.TypeAAAA {
-		log.Debug("IPv6 is disabled. Reply with NoError to %s AAAA request", ctx.Req.Question[0].Name)
-		ctx.Res = genEmptyNoError(ctx.Req)
-		return true
-	}
-
-	return false
-}
-
-// GenEmptyMessage generates empty message with given response code and retry time
+// rafal code
+// //////////////////////////////////////////////////////////////////////////////
 func GenEmptyMessage(request *dns.Msg, rCode int, retry uint32) *dns.Msg {
 	resp := dns.Msg{}
 	resp.SetRcode(request, rCode)
 	resp.RecursionAvailable = true
 	resp.Ns = genSOA(request, retry)
 	return &resp
-}
-
-// genEmptyNoError returns response without answer and NoError RCode
-func genEmptyNoError(request *dns.Msg) *dns.Msg {
-	return GenEmptyMessage(request, dns.RcodeSuccess, retryNoError)
 }
 
 // genSOA returns SOA for an authority section
@@ -66,6 +48,9 @@ func genSOA(request *dns.Msg, retry uint32) []dns.RR {
 	}
 	return []dns.RR{&soa}
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// end rafal code
 
 // ecsFromMsg returns the subnet from EDNS Client Subnet option of m if any.
 func ecsFromMsg(m *dns.Msg) (subnet *net.IPNet, scope int) {

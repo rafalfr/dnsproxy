@@ -1,19 +1,19 @@
 package upstream
 
 import (
-	"context"
 	"fmt"
 	"net/netip"
 	"testing"
 	"time"
 
+	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 const (
-	timeout = 5 * time.Second
+	timeout = 2 * time.Second
 )
 
 // TestExchangeParallel launches several parallel exchanges
@@ -22,7 +22,10 @@ func TestExchangeParallel(t *testing.T) {
 	upstreamList := []string{"1.2.3.4:55", "8.8.8.1", "8.8.8.8:53"}
 
 	for _, s := range upstreamList {
-		u, err := AddressToUpstream(s, &Options{Timeout: timeout})
+		u, err := AddressToUpstream(s, &Options{
+			Logger:  slogutil.NewDiscardLogger(),
+			Timeout: timeout,
+		})
 		if err != nil {
 			t.Fatalf("cannot create upstream: %s", err)
 		}
@@ -45,44 +48,6 @@ func TestExchangeParallel(t *testing.T) {
 	if elapsed > timeout {
 		t.Fatalf("exchange took more time than the configured timeout: %v", elapsed)
 	}
-}
-
-func TestLookupParallel(t *testing.T) {
-	resolvers := []Resolver{}
-	bootstraps := []string{"1.2.3.4:55", "8.8.8.1:555", "8.8.8.8:53"}
-
-	for _, boot := range bootstraps {
-		resolver, _ := NewUpstreamResolver(boot, &Options{Timeout: timeout})
-		resolvers = append(resolvers, resolver)
-	}
-
-	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
-	defer cancel()
-
-	start := time.Now()
-	answer, err := LookupParallel(ctx, resolvers, "google.com")
-	if err != nil || answer == nil {
-		t.Fatalf("failed to lookup %s", err)
-	}
-
-	elapsed := time.Since(start)
-	if elapsed > timeout {
-		t.Fatalf("lookup took more time than the configured timeout: %v", elapsed)
-	}
-}
-
-func TestLookupParallelEmpty(t *testing.T) {
-	resolvers := []Resolver{
-		&UpstreamResolver{Upstream: &testUpstream{}},
-		&UpstreamResolver{Upstream: &testUpstream{}},
-	}
-
-	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
-	defer cancel()
-
-	addrs, err := LookupParallel(ctx, resolvers, "google.com")
-	require.NoError(t, err)
-	assert.Len(t, addrs, 0)
 }
 
 func TestExchangeParallelEmpty(t *testing.T) {

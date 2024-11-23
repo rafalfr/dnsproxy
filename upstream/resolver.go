@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/AdguardTeam/dnsproxy/internal/bootstrap"
 	"github.com/AdguardTeam/dnsproxy/proxyutil"
 	"github.com/AdguardTeam/golibs/errors"
-	"github.com/AdguardTeam/golibs/log"
 	"github.com/miekg/dns"
 )
 
@@ -55,12 +55,12 @@ func NewUpstreamResolver(resolverAddress string, opts *Options) (r *UpstreamReso
 		upsOpts.Timeout = opts.Timeout
 		upsOpts.VerifyServerCertificate = opts.VerifyServerCertificate
 		upsOpts.PreferIPv6 = opts.PreferIPv6
+		upsOpts.Logger = opts.Logger
 	}
 
 	ups, err := AddressToUpstream(resolverAddress, upsOpts)
 	if err != nil {
-		err = fmt.Errorf("creating upstream: %w", err)
-		log.Error("upstream bootstrap: %s", err)
+		err = fmt.Errorf("upstream bootstrap: creating upstream: %w", err)
 
 		return nil, err
 	}
@@ -266,13 +266,13 @@ type CachingResolver struct {
 	// resolver is the underlying resolver to use for lookups.
 	resolver *UpstreamResolver
 
-	// mu protects cached and it's elements.
+	// mu protects cache and it's elements.
 	mu *sync.RWMutex
 
-	// cached is the set of cached results sorted by [resolveResult.name].
+	// cache is the set of resolved hostnames mapped to cached addresses.
 	//
 	// TODO(e.burkov):  Use expiration cache.
-	cached map[string]*ipResult
+	cache map[string]*ipResult
 }
 
 // NewCachingResolver creates a new caching resolver that uses r for lookups.
@@ -280,7 +280,7 @@ func NewCachingResolver(r *UpstreamResolver) (cr *CachingResolver) {
 	return &CachingResolver{
 		resolver: r,
 		mu:       &sync.RWMutex{},
-		cached:   map[string]*ipResult{},
+		cache:    map[string]*ipResult{},
 	}
 }
 
@@ -301,32 +301,38 @@ func (r *CachingResolver) LookupNetIP(
 
 	addrs = r.findCached(host, now)
 	if addrs != nil {
-		return addrs, nil
+		return slices.Clone(addrs), nil
 	}
 
-	newRes, err := r.resolver.lookupNetIP(ctx, network, host)
+	res, err := r.resolver.lookupNetIP(ctx, network, host)
 	if err != nil {
 		return []netip.Addr{}, err
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.setCached(host, res)
 
-	r.cached[host] = newRes
-
-	return newRes.addrs, nil
+	return slices.Clone(res.addrs), nil
 }
 
 // findCached returns the cached addresses for host if it's not expired yet, and
-// the corresponding cached result, if any.
+// the corresponding cached result, if any.  It's safe for concurrent use.
 func (r *CachingResolver) findCached(host string, now time.Time) (addrs []netip.Addr) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	res, ok := r.cached[host]
+	res, ok := r.cache[host]
 	if !ok || res.expire.Before(now) {
 		return nil
 	}
 
 	return res.addrs
+}
+
+// setCached sets the result into the address cache for host.  It's safe for
+// concurrent use.
+func (r *CachingResolver) setCached(host string, res *ipResult) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.cache[host] = res
 }

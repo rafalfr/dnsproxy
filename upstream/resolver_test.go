@@ -9,6 +9,7 @@ import (
 	"github.com/AdguardTeam/dnsproxy/internal/dnsproxytest"
 	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/AdguardTeam/golibs/errors"
+	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,7 +44,12 @@ func TestNewUpstreamResolver(t *testing.T) {
 }
 
 func TestNewUpstreamResolver_validity(t *testing.T) {
-	withTimeoutOpt := &upstream.Options{Timeout: 3 * time.Second}
+	t.Parallel()
+
+	withTimeoutOpt := &upstream.Options{
+		Logger:  slogutil.NewDiscardLogger(),
+		Timeout: 3 * time.Second,
+	}
 
 	testCases := []struct {
 		name       string
@@ -93,6 +99,8 @@ func TestNewUpstreamResolver_validity(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			r, err := upstream.NewUpstreamResolver(tc.addr, withTimeoutOpt)
 			if tc.wantErrMsg != "" {
 				assert.Equal(t, tc.wantErrMsg, err.Error())

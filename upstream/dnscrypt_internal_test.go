@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AdguardTeam/golibs/errors"
+	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/testutil"
 	"github.com/ameshkov/dnscrypt/v2"
@@ -18,8 +19,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// Helpers
 
 // dnsCryptHandlerFunc is a function-based implementation of the
 // [dnscrypt.Handler] interface.
@@ -89,12 +88,15 @@ func startTestDNSCryptServer(
 	return stamp
 }
 
-// Tests
-
 func TestUpstreamDNSCrypt(t *testing.T) {
+	t.Parallel()
+
 	// AdGuard DNS (DNSCrypt)
 	address := "sdns://AQMAAAAAAAAAETk0LjE0MC4xNC4xNDo1NDQzINErR_JS3PLCu_iZEIbq95zkSV2LFsigxDIuUso_OQhzIjIuZG5zY3J5cHQuZGVmYXVsdC5uczEuYWRndWFyZC5jb20"
-	u, err := AddressToUpstream(address, &Options{Timeout: dialTimeout})
+	u, err := AddressToUpstream(address, &Options{
+		Logger:  slogutil.NewDiscardLogger(),
+		Timeout: dialTimeout,
+	})
 	require.NoError(t, err)
 	testutil.CleanupAndRequireSuccess(t, u.Close)
 
@@ -137,7 +139,10 @@ func TestDNSCrypt_Exchange_truncated(t *testing.T) {
 	})
 	srvStamp := startTestDNSCryptServer(t, rc, h)
 
-	u, err := AddressToUpstream(srvStamp.String(), &Options{Timeout: timeout})
+	u, err := AddressToUpstream(srvStamp.String(), &Options{
+		Logger:  slogutil.NewDiscardLogger(),
+		Timeout: timeout,
+	})
 	require.NoError(t, err)
 	testutil.CleanupAndRequireSuccess(t, u.Close)
 
@@ -153,6 +158,8 @@ func TestDNSCrypt_Exchange_truncated(t *testing.T) {
 }
 
 func TestDNSCrypt_Exchange_deadline(t *testing.T) {
+	t.Parallel()
+
 	// Prepare the test DNSCrypt server config
 	rc, err := dnscrypt.GenerateResolverConfig("example.org", nil)
 	require.NoError(t, err)
@@ -164,7 +171,10 @@ func TestDNSCrypt_Exchange_deadline(t *testing.T) {
 	srvStamp := startTestDNSCryptServer(t, rc, h)
 
 	// Use a shorter timeout to speed up the test.
-	u, err := AddressToUpstream(srvStamp.String(), &Options{Timeout: 100 * time.Millisecond})
+	u, err := AddressToUpstream(srvStamp.String(), &Options{
+		Logger:  slogutil.NewDiscardLogger(),
+		Timeout: 100 * time.Millisecond,
+	})
 	require.NoError(t, err)
 	testutil.CleanupAndRequireSuccess(t, u.Close)
 
@@ -192,7 +202,10 @@ func TestDNSCrypt_Exchange_dialFail(t *testing.T) {
 		srvStamp := startTestDNSCryptServer(t, rc, h)
 
 		// Use a shorter timeout to speed up the test.
-		u, err = AddressToUpstream(srvStamp.String(), &Options{Timeout: 100 * time.Millisecond})
+		u, err = AddressToUpstream(srvStamp.String(), &Options{
+			Logger:  slogutil.NewDiscardLogger(),
+			Timeout: 100 * time.Millisecond,
+		})
 		require.NoError(t, err)
 	}))
 
@@ -213,6 +226,7 @@ func TestDNSCrypt_Exchange_dialFail(t *testing.T) {
 
 		// Use a shorter timeout to speed up the test.
 		u, err = AddressToUpstream(srvStamp.String(), &Options{
+			Logger:  slogutil.NewDiscardLogger(),
 			Timeout: 100 * time.Millisecond,
 			VerifyDNSCryptCertificate: func(cert *dnscrypt.Cert) (err error) {
 				return validationErr

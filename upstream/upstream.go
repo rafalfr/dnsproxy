@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/netip"
 	"net/url"
@@ -18,7 +19,7 @@ import (
 
 	"github.com/AdguardTeam/dnsproxy/internal/bootstrap"
 	"github.com/AdguardTeam/golibs/errors"
-	"github.com/AdguardTeam/golibs/log"
+	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/ameshkov/dnscrypt/v2"
 	"github.com/ameshkov/dnsstamps"
@@ -27,17 +28,20 @@ import (
 	"github.com/quic-go/quic-go/logging"
 )
 
-// Upstream is an interface for a DNS resolver.
+// Upstream is an interface for a DNS resolver.  All the methods must be safe
+// for concurrent use.
 type Upstream interface {
-	// Exchange sends the DNS query req to this upstream and returns the
-	// response that has been received or an error if something went wrong.
+	// Exchange sends req to this upstream and returns the response that has
+	// been received or an error if something went wrong.  The implementations
+	// must not modify req as well as the caller must not modify it until the
+	// method returns.  It shouldn't be called after closing.
 	Exchange(req *dns.Msg) (resp *dns.Msg, err error)
 
-	// Address returns the address of the upstream DNS resolver.
+	// Address returns the human-readable address of the upstream DNS resolver.
+	// It may differ from what was passed to [AddressToUpstream].
 	Address() (addr string)
 
-	// Closer used to close the upstreams properly.  Exchange shouldn't be
-	// called after calling Close.
+	// Closer used to close the upstreams properly.
 	io.Closer
 }
 
@@ -52,6 +56,10 @@ type QUICTraceFunc func(
 // Options for AddressToUpstream func.  With these options we can configure the
 // upstream properties.
 type Options struct {
+	// Logger is used for logging during parsing and upstream exchange.  If nil,
+	// [slog.Default] is used.
+	Logger *slog.Logger
+
 	// VerifyServerCertificate is used to set the VerifyPeerCertificate property
 	// of the *tls.Config for DNS-over-HTTPS, DNS-over-QUIC, and DNS-over-TLS.
 	VerifyServerCertificate func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
@@ -111,6 +119,7 @@ func (o *Options) Clone() (clone *Options) {
 		QUICTracer:                o.QUICTracer,
 		RootCAs:                   o.RootCAs,
 		CipherSuites:              o.CipherSuites,
+		Logger:                    o.Logger,
 	}
 }
 
@@ -177,6 +186,10 @@ func AddressToUpstream(addr string, opts *Options) (u Upstream, err error) {
 		opts = &Options{}
 	}
 
+	if opts.Logger == nil {
+		opts.Logger = slog.Default()
+	}
+
 	var uu *url.URL
 	if strings.Contains(addr, "://") {
 		uu, err = url.Parse(addr)
@@ -218,19 +231,22 @@ func validateUpstreamURL(u *url.URL) (err error) {
 		host = h
 	}
 
-	// If it's an IPv6 address enclosed in square brackets with no port.
-	//
-	// See https://github.com/AdguardTeam/dnsproxy/issues/379.
-	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
-		_, err = netip.ParseAddr(host[1 : len(host)-1])
-	} else {
-		_, err = netip.ParseAddr(host)
+	// minEnclosedIPv6Len is the minimum length of an IP address enclosed in
+	// square brackets.
+	const minEnclosedIPv6Len = len("[::]")
+
+	possibleIP := host
+	if l := len(host); l >= minEnclosedIPv6Len && host[0] == '[' && host[l-1] == ']' {
+		// Might be an IPv6 address enclosed in square brackets with no port.
+		//
+		// See https://github.com/AdguardTeam/dnsproxy/issues/379.
+		possibleIP = host[1 : l-1]
 	}
-	if err == nil {
+	if netutil.IsValidIPString(possibleIP) {
 		return nil
 	}
 
-	err = netutil.ValidateHostname(host)
+	err = netutil.ValidateDomainName(host)
 	if err != nil {
 		return fmt.Errorf("invalid address %s: %w", host, err)
 	}
@@ -310,7 +326,7 @@ func addPort(u *url.URL, port uint16) {
 // logBegin logs the start of DNS request resolution.  It should be called right
 // before dialing the connection to the upstream.  n is the [network] that will
 // be used to send the request.
-func logBegin(addr string, n network, req *dns.Msg) {
+func logBegin(l *slog.Logger, addr string, n network, req *dns.Msg) {
 	var qtype dns.Type
 	var qname string
 	if len(req.Question) != 0 {
@@ -318,25 +334,25 @@ func logBegin(addr string, n network, req *dns.Msg) {
 		qname = req.Question[0].Name
 	}
 
-	log.Debug("dnsproxy: sending request to %s over %s: %s %q", addr, n, qtype, qname)
+	l.Debug("sending request", "addr", addr, "proto", n, "qtype", qtype, "qname", qname)
 }
 
 // logFinish logs the end of DNS request resolution.  It should be called right
 // after receiving the response from the upstream or the failing action.  n is
 // the [network] that was used to send the request.
-func logFinish(addr string, n network, err error) {
-	logRoutine := log.Debug
-
+func logFinish(l *slog.Logger, addr string, n network, err error) {
+	lvl := slog.LevelDebug
 	status := "ok"
+
 	if err != nil {
 		status = err.Error()
 		if isTimeout(err) {
 			// Notify user about the timeout.
-			logRoutine = log.Error
+			lvl = slog.LevelError
 		}
 	}
 
-	logRoutine("dnsproxy: %s: response received over %s: %q", addr, n, status)
+	l.Log(context.TODO(), lvl, "response received", "addr", addr, "proto", n, "status", status)
 }
 
 // isTimeout returns true if err is a timeout error.
@@ -363,9 +379,17 @@ type DialerInitializer func() (handler bootstrap.DialHandler, err error)
 // newDialerInitializer creates an initializer of the dialer that will dial the
 // addresses resolved from u using opts.
 func newDialerInitializer(u *url.URL, opts *Options) (di DialerInitializer) {
+	var l *slog.Logger
+	if opts.Logger != nil {
+		l = opts.Logger.With(slogutil.KeyPrefix, "bootstrap")
+	} else {
+		l = slog.Default()
+	}
+
+	// TODO(e.burkov):  Add netutil.IsValidIPPortString.
 	if _, err := netip.ParseAddrPort(u.Host); err == nil {
 		// Don't resolve the address of the server since it's already an IP.
-		handler := bootstrap.NewDialContext(opts.Timeout, u.Host)
+		handler := bootstrap.NewDialContext(opts.Timeout, l, u.Host)
 
 		return func() (h bootstrap.DialHandler, dialerErr error) {
 			return handler, nil
@@ -379,6 +403,6 @@ func newDialerInitializer(u *url.URL, opts *Options) (di DialerInitializer) {
 	}
 
 	return func() (h bootstrap.DialHandler, err error) {
-		return bootstrap.ResolveDialContext(u, opts.Timeout, boot, opts.PreferIPv6)
+		return bootstrap.ResolveDialContext(u, opts.Timeout, boot, opts.PreferIPv6, l)
 	}
 }

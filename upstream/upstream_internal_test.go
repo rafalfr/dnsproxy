@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/testutil"
 	"github.com/ameshkov/dnsstamps"
@@ -27,11 +28,14 @@ import (
 
 // TODO(ameshkov): Make tests here not depend on external servers.
 
+// TODO(d.kolyshev): Remove this after migrating dnscrypt to slog.
 func TestMain(m *testing.M) {
 	testutil.DiscardLogOutput(m)
 }
 
 func TestUpstream_bootstrapTimeout(t *testing.T) {
+	t.Parallel()
+
 	const (
 		timeout = 100 * time.Millisecond
 		count   = 10
@@ -43,12 +47,14 @@ func TestUpstream_bootstrapTimeout(t *testing.T) {
 	testutil.CleanupAndRequireSuccess(t, udpListener.Close)
 
 	rslv, err := NewUpstreamResolver(udpListener.LocalAddr().String(), &Options{
+		Logger:  slogutil.NewDiscardLogger(),
 		Timeout: timeout,
 	})
 	require.NoError(t, err)
 
 	// Create an upstream that uses this faulty bootstrap.
 	u, err := AddressToUpstream("tls://random-domain-name", &Options{
+		Logger:    slogutil.NewDiscardLogger(),
 		Bootstrap: NewCachingResolver(rslv),
 		Timeout:   timeout,
 	})
@@ -99,12 +105,20 @@ func TestUpstream_bootstrapTimeout(t *testing.T) {
 }
 
 func TestUpstreams(t *testing.T) {
+	t.Parallel()
+
+	const upsTimeout = 10 * time.Second
+
+	l := slogutil.NewDiscardLogger()
+
 	googleRslv, err := NewUpstreamResolver("8.8.8.8:53", &Options{
-		Timeout: timeout,
+		Logger:  l,
+		Timeout: upsTimeout,
 	})
 	require.NoError(t, err)
 	cloudflareRslv, err := NewUpstreamResolver("1.0.0.1:53", &Options{
-		Timeout: timeout,
+		Logger:  l,
+		Timeout: upsTimeout,
 	})
 	require.NoError(t, err)
 
@@ -196,9 +210,11 @@ func TestUpstreams(t *testing.T) {
 
 	for _, test := range upstreams {
 		t.Run(test.address, func(t *testing.T) {
+			t.Parallel()
+
 			u, upsErr := AddressToUpstream(
 				test.address,
-				&Options{Bootstrap: test.bootstrap, Timeout: timeout},
+				&Options{Logger: l, Bootstrap: test.bootstrap, Timeout: upsTimeout},
 			)
 			require.NoErrorf(t, upsErr, "failed to generate upstream from address %s", test.address)
 			testutil.CleanupAndRequireSuccess(t, u.Close)
@@ -212,7 +228,10 @@ func TestAddressToUpstream(t *testing.T) {
 	cloudflareRslv, err := NewUpstreamResolver("1.1.1.1", nil)
 	require.NoError(t, err)
 
-	opt := &Options{Bootstrap: NewCachingResolver(cloudflareRslv)}
+	opt := &Options{
+		Logger:    slogutil.NewDiscardLogger(),
+		Bootstrap: NewCachingResolver(cloudflareRslv),
+	}
 
 	testCases := []struct {
 		addr string
@@ -299,14 +318,14 @@ func TestAddressToUpstream_bads(t *testing.T) {
 		wantErrMsg: `invalid port : strconv.ParseUint: parsing "": invalid syntax`,
 	}, {
 		addr:       ":53",
-		wantErrMsg: `invalid address : bad hostname "": hostname is empty`,
+		wantErrMsg: `invalid address : bad domain name "": domain name is empty`,
 	}, {
 		addr: "!!!",
-		wantErrMsg: `invalid address !!!: bad hostname "!!!": bad top-level domain name ` +
+		wantErrMsg: `invalid address !!!: bad domain name "!!!": bad top-level domain name ` +
 			`label "!!!": bad top-level domain name label rune '!'`,
 	}, {
 		addr: "123",
-		wantErrMsg: `invalid address 123: bad hostname "123": bad top-level domain name ` +
+		wantErrMsg: `invalid address 123: bad domain name "123": bad top-level domain name ` +
 			`label "123": all octets are numeric`,
 	}, {
 		addr: "tcp://12345.1.1.1:1234567",
@@ -321,14 +340,14 @@ func TestAddressToUpstream_bads(t *testing.T) {
 		wantErrMsg: `invalid port : strconv.ParseUint: parsing "": invalid syntax`,
 	}, {
 		addr:       "tcp://:53",
-		wantErrMsg: `invalid address : bad hostname "": hostname is empty`,
+		wantErrMsg: `invalid address : bad domain name "": domain name is empty`,
 	}, {
 		addr: "tcp://!!!",
-		wantErrMsg: `invalid address !!!: bad hostname "!!!": bad top-level domain name ` +
+		wantErrMsg: `invalid address !!!: bad domain name "!!!": bad top-level domain name ` +
 			`label "!!!": bad top-level domain name label rune '!'`,
 	}, {
 		addr: "tcp://123",
-		wantErrMsg: `invalid address 123: bad hostname "123": bad top-level domain name ` +
+		wantErrMsg: `invalid address 123: bad domain name "123": bad top-level domain name ` +
 			`label "123": all octets are numeric`,
 	}}
 
@@ -341,6 +360,8 @@ func TestAddressToUpstream_bads(t *testing.T) {
 }
 
 func TestUpstreamDoTBootstrap(t *testing.T) {
+	t.Parallel()
+
 	upstreams := []struct {
 		address   string
 		bootstrap string
@@ -359,11 +380,13 @@ func TestUpstreamDoTBootstrap(t *testing.T) {
 	for _, tc := range upstreams {
 		t.Run(tc.address, func(t *testing.T) {
 			rslv, err := NewUpstreamResolver(tc.bootstrap, &Options{
+				Logger:  slogutil.NewDiscardLogger(),
 				Timeout: timeout,
 			})
 			require.NoError(t, err)
 
 			u, err := AddressToUpstream(tc.address, &Options{
+				Logger:    slogutil.NewDiscardLogger(),
 				Bootstrap: NewCachingResolver(rslv),
 				Timeout:   timeout,
 			})
@@ -377,6 +400,8 @@ func TestUpstreamDoTBootstrap(t *testing.T) {
 
 // Test for DoH and DoT upstreams with two bootstraps (only one is valid)
 func TestUpstreamsInvalidBootstrap(t *testing.T) {
+	t.Parallel()
+
 	upstreams := []struct {
 		address   string
 		bootstrap []string
@@ -402,11 +427,16 @@ func TestUpstreamsInvalidBootstrap(t *testing.T) {
 		bootstrap: []string{"1.2.3.4:55", "8.8.8.8"},
 	}}
 
+	l := slogutil.NewDiscardLogger()
+
 	for _, tc := range upstreams {
 		t.Run(tc.address, func(t *testing.T) {
+			t.Parallel()
+
 			var rslv ConsequentResolver
 			for _, b := range tc.bootstrap {
 				r, err := NewUpstreamResolver(b, &Options{
+					Logger:  l,
 					Timeout: timeout,
 				})
 				require.NoError(t, err)
@@ -415,6 +445,7 @@ func TestUpstreamsInvalidBootstrap(t *testing.T) {
 			}
 
 			u, err := AddressToUpstream(tc.address, &Options{
+				Logger:    l,
 				Bootstrap: rslv,
 				Timeout:   timeout,
 			})
@@ -432,6 +463,8 @@ func TestUpstreamsInvalidBootstrap(t *testing.T) {
 }
 
 func TestAddressToUpstream_StaticResolver(t *testing.T) {
+	t.Parallel()
+
 	h := func(w dns.ResponseWriter, m *dns.Msg) {
 		require.NoError(testutil.PanicT{}, w.WriteMsg(respondToTestMessage(m)))
 	}
@@ -478,7 +511,10 @@ func TestAddressToUpstream_StaticResolver(t *testing.T) {
 
 	for _, tc := range upstreams {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			opts := &Options{
+				Logger:             slogutil.NewDiscardLogger(),
 				Bootstrap:          tc.rslv,
 				Timeout:            timeout,
 				InsecureSkipVerify: true,

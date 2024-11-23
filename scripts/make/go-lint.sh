@@ -63,12 +63,12 @@ set -f -u
 # schemas, which use package reflect.  If your project needs more exceptions,
 # add and document them.
 #
-# TODO(a.garipov): Add golibs/log.
 # TODO(a.garipov): Add deprecated package golang.org/x/exp/maps once all
 # projects switch to Go 1.23.
 blocklist_imports() {
 	git grep\
 		-e '[[:space:]]"errors"$'\
+		-e '[[:space:]]"github.com/AdguardTeam/golibs/log"$'\
 		-e '[[:space:]]"golang.org/x/exp/slices"$'\
 		-e '[[:space:]]"golang.org/x/net/context"$'\
 		-e '[[:space:]]"io/ioutil"$'\
@@ -150,31 +150,9 @@ run_linter "${GO:-go}" vet ./...
 
 run_linter govulncheck ./...
 
-# TODO(a.garipov): Enable for all.
-run_linter gocyclo --over 10\
-	./internal/bootstrap/\
-	./internal/netutil/\
-	./internal/version/\
-	./fastip/\
-	./proxyutil/\
-	./upstream/\
-	;
+run_linter gocyclo --over 10 .
 
-run_linter gocyclo --over 20 ./main.go
-run_linter gocyclo --over 15 ./proxy/
-
-# TODO(a.garipov): Enable for all.
-run_linter gocognit --over 10\
-	./internal/bootstrap/\
-	./internal/netutil/\
-	./internal/version/\
-	./fastip/\
-	./proxyutil/\
-	./upstream/\
-	;
-
-run_linter gocognit --over 35 ./main.go
-run_linter gocognit --over 17 ./proxy/
+run_linter gocognit --over 10 .
 
 run_linter ineffassign ./...
 
@@ -192,7 +170,8 @@ run_linter fieldalignment ./...
 
 run_linter -e shadow --strict ./...
 
-run_linter gosec --quiet ./...
+# TODO(a.garipov):  Re-enable G115.
+run_linter gosec --exclude G115 --quiet ./...
 
 run_linter errcheck ./...
 

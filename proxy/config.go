@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/netip"
 	"net/url"
@@ -10,22 +11,12 @@ import (
 
 	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/AdguardTeam/golibs/errors"
-	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/ameshkov/dnscrypt/v2"
 )
 
-// UpstreamModeType - upstream mode
-type UpstreamModeType int
-
-const (
-	// UModeLoadBalance - LoadBalance
-	UModeLoadBalance UpstreamModeType = iota
-	// UModeParallel - parallel queries to all configured upstream servers are enabled
-	UModeParallel
-	// UModeFastestAddr - use Fastest Address algorithm
-	UModeFastestAddr
-)
+// LogPrefix is a prefix for logging.
+//const LogPrefix = "" // rafal code
 
 // RequestHandler is an optional custom handler for DNS requests.  It's used
 // instead of [Proxy.Resolve] if set.  The resulting error doesn't affect the
@@ -45,10 +36,14 @@ type RequestHandler func(p *Proxy, dctx *DNSContext) (err error)
 // [BeforeRequestHandler].
 type ResponseHandler func(dctx *DNSContext, err error)
 
-// Config contains all the fields necessary for proxy configuration
+// Config contains all the fields necessary for proxy configuration.
 //
 // TODO(a.garipov): Consider extracting conf blocks for better fieldalignment.
 type Config struct {
+	// Logger is used as the base logger for the proxy service.  If nil,
+	// [slog.Default] with [LogPrefix] is used.
+	Logger *slog.Logger
+
 	// TrustedProxies is the trusted list of CIDR networks to detect proxy
 	// servers addresses from where the DoH requests should be handled.  The
 	// value of nil makes Proxy not trust any address.
@@ -109,6 +104,10 @@ type Config struct {
 	// HTTPSServerName sets the Server header of the HTTPS server responses, if
 	// not empty.
 	HTTPSServerName string
+
+	// UpstreamMode determines the logic through which upstreams will be used.
+	// If not specified the [proxy.UpstreamModeLoadBalance] is used.
+	UpstreamMode UpstreamMode
 
 	// UDPListenAddr is the set of UDP addresses to listen for plain
 	// DNS-over-UDP requests.
@@ -188,12 +187,9 @@ type Config struct {
 	// buffers can handle larger bursts of requests before packets get dropped.
 	UDPBufferSize int
 
-	// UpstreamMode determines the logic through which upstreams will be used.
-	UpstreamMode UpstreamModeType
-
 	// FastestPingTimeout is the timeout for waiting the first successful
-	// dialing when the UpstreamMode is set to UModeFastestAddr.  Non-positive
-	// value will be replaced with the default one.
+	// dialing when the UpstreamMode is set to [UpstreamModeFastestAddr].
+	// Non-positive value will be replaced with the default one.
 	FastestPingTimeout time.Duration
 
 	// RefuseAny makes proxy refuse the requests of type ANY.
@@ -275,6 +271,15 @@ func (p *Proxy) validateConfig() (err error) {
 		return fmt.Errorf("validating ratelimit: %w", err)
 	}
 
+	switch p.UpstreamMode {
+	case "":
+		// Go on.
+	case UpstreamModeFastestAddr, UpstreamModeLoadBalance, UpstreamModeParallel:
+		// Go on.
+	default:
+		return fmt.Errorf("bad upstream mode: %q", p.UpstreamMode)
+	}
+
 	p.logConfigInfo()
 
 	return nil
@@ -316,51 +321,76 @@ func checkInclusion(n, minN, maxN int) (err error) {
 // logConfigInfo logs proxy configuration information.
 func (p *Proxy) logConfigInfo() {
 	if p.CacheMinTTL > 0 || p.CacheMaxTTL > 0 {
-		log.Info("Cache TTL override is enabled. Min=%d, Max=%d", p.CacheMinTTL, p.CacheMaxTTL)
+		p.logger.Info("cache ttl override is enabled", "min", p.CacheMinTTL, "max", p.CacheMaxTTL)
 	}
 
 	if p.Ratelimit > 0 {
-		log.Info(
-			"Ratelimit is enabled and set to %d rps, IPv4 subnet mask len %d, IPv6 subnet mask len %d",
+		p.logger.Info(
+			"ratelimit is enabled",
+			"rps",
 			p.Ratelimit,
+			"ipv4_subnet_mask_len",
 			p.RatelimitSubnetLenIPv4,
+			"ipv6_subnet_mask_len",
 			p.RatelimitSubnetLenIPv6,
 		)
 	}
 
 	if p.RefuseAny {
-		log.Info("dnsproxy: server will refuse requests of type ANY")
+		p.logger.Info("server will refuse requests of type any")
 	}
 
 	if len(p.BogusNXDomain) > 0 {
-		log.Info("%d bogus-nxdomain IP specified", len(p.BogusNXDomain))
+		p.logger.Info("bogus-nxdomain ip specified", "prefix_len", len(p.BogusNXDomain))
+	}
+
+	if p.UpstreamMode != "" {
+		p.logger.Info("upstream mode is set", "mode", p.UpstreamMode)
 	}
 }
 
 // validateListenAddrs returns an error if the addresses are not configured
 // properly.
-func (p *Proxy) validateListenAddrs() error {
+func (p *Proxy) validateListenAddrs() (err error) {
 	if !p.hasListenAddrs() {
 		return errors.Error("no listen address specified")
 	}
 
-	if p.TLSConfig == nil {
-		if p.TLSListenAddr != nil {
-			return errors.Error("cannot create tls listener without tls config")
+	err = p.validateTLSConfig()
+	if err != nil {
+		return fmt.Errorf("invalid tls configuration: %w", err)
+	}
+
+	if p.DNSCryptResolverCert == nil || p.DNSCryptProviderName == "" {
+		if p.DNSCryptTCPListenAddr != nil {
+			return errors.Error("cannot create dnscrypt tcp listener without dnscrypt config")
 		}
 
-		if p.HTTPSListenAddr != nil {
-			return errors.Error("cannot create https listener without tls config")
-		}
-
-		if p.QUICListenAddr != nil {
-			return errors.Error("cannot create quic listener without tls config")
+		if p.DNSCryptUDPListenAddr != nil {
+			return errors.Error("cannot create dnscrypt udp listener without dnscrypt config")
 		}
 	}
 
-	if (p.DNSCryptTCPListenAddr != nil || p.DNSCryptUDPListenAddr != nil) &&
-		(p.DNSCryptResolverCert == nil || p.DNSCryptProviderName == "") {
-		return errors.Error("cannot create dnscrypt listener without dnscrypt config")
+	return nil
+}
+
+// validateTLSConfig returns an error if proxy TLS configuration parameters are
+// needed but aren't provided.
+func (p *Proxy) validateTLSConfig() (err error) {
+	if p.TLSConfig != nil {
+		return nil
+	}
+
+	if p.TLSListenAddr != nil {
+		return errors.Error("tls listener configuration not found")
+	}
+
+	if p.HTTPSListenAddr != nil {
+		return errors.Error("https listener configuration not found")
+	}
+
+	if p.QUICListenAddr != nil {
+		return errors.Error("quic listener configuration not found")
 	}
 
 	return nil

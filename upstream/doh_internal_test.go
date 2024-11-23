@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/testutil"
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
@@ -22,6 +23,8 @@ import (
 )
 
 func TestUpstreamDoH(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name             string
 		expectedProtocol HTTPVersion
@@ -60,6 +63,8 @@ func TestUpstreamDoH(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			srv := startDoHServer(t, testDoHServerOptions{
 				http3Enabled:     tc.http3Enabled,
 				delayHandshakeH2: tc.delayHandshakeH2,
@@ -71,6 +76,7 @@ func TestUpstreamDoH(t *testing.T) {
 
 			var lastState tls.ConnectionState
 			opts := &Options{
+				Logger:             slogutil.NewDiscardLogger(),
 				InsecureSkipVerify: true,
 				HTTPVersions:       tc.httpVersions,
 				VerifyConnection: func(state tls.ConnectionState) (err error) {
@@ -109,6 +115,8 @@ func TestUpstreamDoH(t *testing.T) {
 }
 
 func TestUpstreamDoH_raceReconnect(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name             string
 		expectedProtocol HTTPVersion
@@ -151,9 +159,7 @@ func TestUpstreamDoH_raceReconnect(t *testing.T) {
 	// important to test for race conditions.
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if t.Name() == "TestUpstreamDoH_raceReconnect/http3" {
-				t.Skip("TODO(e.burkov): remove the skip when quic-go is fixed")
-			}
+			t.Parallel()
 
 			const timeout = time.Millisecond * 100
 			var requestsCount int32
@@ -179,6 +185,7 @@ func TestUpstreamDoH_raceReconnect(t *testing.T) {
 			// race test.
 			address := fmt.Sprintf("https://%s/dns-query", srv.addr)
 			opts := &Options{
+				Logger:             slogutil.NewDiscardLogger(),
 				InsecureSkipVerify: true,
 				HTTPVersions:       tc.httpVersions,
 				Timeout:            timeout,
@@ -224,9 +231,10 @@ func TestUpstreamDoH_serverRestart(t *testing.T) {
 
 				var err error
 				u, err = AddressToUpstream(upsAddr, &Options{
+					Logger:             slogutil.NewDiscardLogger(),
 					InsecureSkipVerify: true,
 					HTTPVersions:       tc.httpVersions,
-					Timeout:            time.Second,
+					Timeout:            100 * time.Millisecond,
 				})
 				require.NoError(t, err)
 
@@ -261,6 +269,8 @@ func TestUpstreamDoH_serverRestart(t *testing.T) {
 }
 
 func TestUpstreamDoH_0RTT(t *testing.T) {
+	t.Parallel()
+
 	// Run the first server instance.
 	srv := startDoHServer(t, testDoHServerOptions{
 		http3Enabled: true,
@@ -270,6 +280,7 @@ func TestUpstreamDoH_0RTT(t *testing.T) {
 	tracer := &quicTracer{}
 	address := fmt.Sprintf("h3://%s/dns-query", srv.addr)
 	u, err := AddressToUpstream(address, &Options{
+		Logger:             slogutil.NewDiscardLogger(),
 		InsecureSkipVerify: true,
 		QUICTracer:         tracer.TracerForConnection,
 	})
