@@ -17,7 +17,7 @@ example.crt
 example.key
 coverage.txt
 stats.json
-config.yaml
+*.yaml
 *.key
 *.crt
 *.csr
