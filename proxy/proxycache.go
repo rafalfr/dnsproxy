@@ -45,7 +45,6 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 	canRemoveIpv4 := false
 	for _, answer := range d.Res.Answer {
 		if answer.Header().Rrtype == dns.TypeAAAA {
-			p.logger.Info(answer.(*dns.AAAA).AAAA.String())
 			canRemoveIpv4 = true
 			break
 		}
