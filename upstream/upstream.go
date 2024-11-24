@@ -401,7 +401,7 @@ func newDialerInitializer(u *url.URL, opts *Options) (di DialerInitializer) {
 		// Use the default resolver for bootstrapping.
 		boot = net.DefaultResolver
 	}
-
+	
 	return func() (h bootstrap.DialHandler, err error) {
 		return bootstrap.ResolveDialContext(u, opts.Timeout, boot, true, l)
 	}
