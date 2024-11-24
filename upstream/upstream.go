@@ -403,6 +403,6 @@ func newDialerInitializer(u *url.URL, opts *Options) (di DialerInitializer) {
 	}
 
 	return func() (h bootstrap.DialHandler, err error) {
-		return bootstrap.ResolveDialContext(u, opts.Timeout, boot, opts.PreferIPv6, l)
+		return bootstrap.ResolveDialContext(u, opts.Timeout, boot, true, l)
 	}
 }

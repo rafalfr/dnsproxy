@@ -368,6 +368,12 @@ func getQueryType(queryType uint16) string {
 		return "NSEC3"
 	case dns.TypeNSEC3PARAM:
 		return "NSEC3PARAM"
+	case dns.TypeRRSIG:
+		return "RRSIG"
+	case dns.TypeSIG:
+		return "SIG"
+	case dns.TypeTLSA:
+		return "TLSA"
 	default:
 		return "UNKNOWN"
 	}
