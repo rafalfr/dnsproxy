@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"github.com/miekg/dns"
 	"net"
 	"slices"
 )
@@ -40,32 +39,6 @@ func (p *Proxy) replyFromCache(d *DNSContext) (hit bool) {
 
 	d.Res = ci.m
 	d.CachedUpstreamAddr = ci.u
-
-	// rafal code
-	canRemoveIpv4 := false
-	for _, answer := range d.Res.Answer {
-		if answer.Header().Rrtype == dns.TypeAAAA {
-			canRemoveIpv4 = true
-			break
-		}
-	}
-
-	if canRemoveIpv4 {
-		index := 0
-		for _, answer := range d.Res.Answer {
-			if answer.Header().Rrtype == dns.TypeA {
-				d.Res.Answer = append(d.Res.Answer[:index], d.Res.Answer[index+1:]...)
-				break
-			}
-			index++
-		}
-
-		//p.logger.Info("new answer")
-		//for _, answer := range d.Res.Answer {
-		//	p.logger.Info(answer.String())
-		//}
-	}
-	// end rafal code
 
 	//p.logger.Debug(
 	//	"replying from cache",

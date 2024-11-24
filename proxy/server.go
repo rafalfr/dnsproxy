@@ -327,12 +327,50 @@ func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 		if len(m.Question) > 0 {
 			numQueries.Add(1)
 			sourceAddress := d.Addr.String()
-			message := fmt.Sprintf("Q#%-10d%-75.75s from %-30.30s\n", numQueries.Load(), m.Question[0].Name, sourceAddress)
+			questionString := m.Question[0].Name + ":" + getQueryType(m.Question[0].Qtype)
+			message := fmt.Sprintf("Q#%-10d%-75.75s from %-30.30s\n", numQueries.Load(), questionString, sourceAddress)
 			p.logger.Info(message)
 		}
 	}
 	//////////////////////////////////////////////////////////////////////////////
 	// end rafal code
+}
+
+func getQueryType(queryType uint16) string {
+	switch queryType {
+	case dns.TypeA:
+		return "A"
+	case dns.TypeAAAA:
+		return "AAAA"
+	case dns.TypeCNAME:
+		return "CNAME"
+	case dns.TypeMX:
+		return "MX"
+	case dns.TypeNS:
+		return "NS"
+	case dns.TypePTR:
+		return "PTR"
+	case dns.TypeSOA:
+		return "SOA"
+	case dns.TypeTXT:
+		return "TXT"
+	case dns.TypeSRV:
+		return "SRV"
+	case dns.TypeSPF:
+		return "SPF"
+	case dns.TypeDNSKEY:
+		return "DNSKEY"
+	case dns.TypeDS:
+		return "DS"
+	case dns.TypeNSEC:
+		return "NSEC"
+	case dns.TypeNSEC3:
+		return "NSEC3"
+	case dns.TypeNSEC3PARAM:
+		return "NSEC3PARAM"
+	default:
+		return "UNKNOWN"
+	}
 }
 
 // logWithNonCrit logs the error on the appropriate level depending on whether
