@@ -5,6 +5,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"github.com/AdguardTeam/golibs/log"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -86,6 +87,7 @@ func ResolveDialContext(
 
 	addrs := make([]string, 0, len(ips))
 	for _, ip := range ips {
+		log.Printf("host:%s => %s\n", u.Host, ip.String())
 		addrs = append(addrs, netip.AddrPortFrom(ip, port).String())
 	}
 

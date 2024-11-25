@@ -23,6 +23,7 @@
 
 # https://www.baeldung.com/linux/add-self-signed-certificate-trusted-list
 # https://github.com/ChristianLempa/cheat-sheets/blob/main/misc/ssl-certs.md
+# https://www.ipfire.org/docs/dns/public-servers
 ---
 bootstrap:
   - "9.9.9.9:53"
@@ -39,15 +40,22 @@ http3: true
 all-servers: false
 udp-buf-size: 0
 upstream:
-  - "quic://p0.freedns.controld.com"
-  - "quic://dnsforge.de"
-  - "quic://unfiltered.adguard-dns.com"
-  - "quic://zero.dns0.eu"
   - "tls://private.canadianshield.cira.ca"
   - "tls://dot1.applied-privacy.net"
-  - "tls://dnspub.restena.lu"
+  - "tls://resolv.flokinet.net"
   - "tls://dns3.digitalcourage.de"
   - "tls://dns.digitale-gesellschaft.ch"
+  - "tls://dns.cmrg.net"
+  - "tls://recursor01.dns.lightningwirelabs.com"
+  - "tls://dot.linuxpatch.com"
+  - "tls://dns-ga.com"
+  - "https://freedns.controld.com/p0"
+  - "https://dnsforge.de/dns-query"
+  - "https://unfiltered.adguard-dns.com/dns-query"
+  - "https://dns0.eu/"
+  - "https://dnspub.restena.lu/dns-query"  
+  - "https://doh.ffmuc.net/dns-query"
+  - "https://anycast.uncensoreddns.org/dns-query"
   - "https://dns.mullvad.net/dns-query"
   - "https://dns.quad9.net/dns-query"
   - "https://one.one.one.one/dns-query"
@@ -56,7 +64,6 @@ upstream:
   - "https://dns.artikel10.org/dns-query"
   - "https://doh.opendns.com/dns-query"
   - "https://sky.rethinkdns.com/1:AAkACAQA"
-  #- "https://dns.dnswarden.com/uncensored"
   - "https://secure.avastdns.com/dns-query"
   - "[/google.pl/]https://dns.google/dns-query"
   - "[/google.com/]https://dns.google/dns-query"
