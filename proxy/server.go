@@ -305,7 +305,7 @@ func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 					upstreamHost = u.Host
 				}
 				upstreamHost = strings.Trim(upstreamHost, " \n\t")
-				message := fmt.Sprintf("A#%-10d%-50.49s%-25.25s from %-50.50s\n", numAnswers.Load(), answerDomain, ipAddress, utils.ShortText(upstreamHost, 50))
+				message := fmt.Sprintf("A#%-10d%-50.49s%-30.30s from %-60.60s\n", numAnswers.Load(), answerDomain, ipAddress, utils.ShortText(upstreamHost, 50))
 				if SM.Exists("resolvers::" + upstreamHost) {
 					SM.Set("resolvers::"+upstreamHost, SM.Get("resolvers::"+upstreamHost).(uint64)+1)
 				} else {
@@ -319,7 +319,7 @@ func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 				} else {
 					SM.Set("local::num_cache_and_blocked_responses", uint64(1))
 				}
-				message := fmt.Sprintf("A#%-10d%-50.49s%-25.25s from cache (#%d)\n", numAnswers.Load(), answerDomain, ipAddress, numCacheHits.Load())
+				message := fmt.Sprintf("A#%-10d%-50.49s%-30.30s from cache (#%d)\n", numAnswers.Load(), answerDomain, ipAddress, numCacheHits.Load())
 				p.logger.Info(message)
 			}
 		}
@@ -328,7 +328,7 @@ func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 			numQueries.Add(1)
 			sourceAddress := d.Addr.String()
 			questionString := m.Question[0].Name + ":" + getQueryType(m.Question[0].Qtype)
-			message := fmt.Sprintf("Q#%-10d%-75.75s from %-30.30s\n", numQueries.Load(), questionString, sourceAddress)
+			message := fmt.Sprintf("Q#%-10d%-80.80s from %-40.40s\n", numQueries.Load(), questionString, sourceAddress)
 			p.logger.Info(message)
 		}
 	}
@@ -344,8 +344,6 @@ func getQueryType(queryType uint16) string {
 		return "AAAA"
 	case dns.TypeCNAME:
 		return "CNAME"
-	case dns.TypeMX:
-		return "MX"
 	case dns.TypeNS:
 		return "NS"
 	case dns.TypePTR:
@@ -356,8 +354,6 @@ func getQueryType(queryType uint16) string {
 		return "TXT"
 	case dns.TypeSRV:
 		return "SRV"
-	case dns.TypeSPF:
-		return "SPF"
 	case dns.TypeDNSKEY:
 		return "DNSKEY"
 	case dns.TypeDS:
@@ -374,6 +370,70 @@ func getQueryType(queryType uint16) string {
 		return "SIG"
 	case dns.TypeTLSA:
 		return "TLSA"
+	case dns.TypeAFSDB:
+		return "AFSDB"
+	case dns.TypeAMTRELAY:
+		return "AMTRELAY"
+	case dns.TypeANY:
+		return "ANY"
+	case dns.TypeAPL:
+		return "APL"
+	case dns.TypeATMA:
+		return "ATMA"
+	case dns.TypeCAA:
+		return "CAA"
+	case dns.TypeAVC:
+		return "AVC"
+	case dns.TypeDHCID:
+		return "DHCID"
+	case dns.TypeDLV:
+		return "DLV"
+	case dns.TypeHIP:
+		return "HIP"
+	case dns.TypeIPSECKEY:
+		return "IPSECKEY"
+	case dns.TypeKEY:
+		return "KEY"
+	case dns.TypeKX:
+		return "KX"
+	case dns.TypeLOC:
+		return "LOC"
+	case dns.TypeMB:
+		return "MB"
+	case dns.TypeMD:
+		return "MD"
+	case dns.TypeMF:
+		return "MF"
+	case dns.TypeMG:
+		return "MG"
+	case dns.TypeMINFO:
+		return "MINFO"
+	case dns.TypeMR:
+		return "MR"
+	case dns.TypeMX:
+		return "MX"
+	case dns.TypeNID:
+		return "NID"
+	case dns.TypeNIMLOC:
+		return "NIMLOC"
+	case dns.TypeNINFO:
+		return "NINFO"
+	case dns.TypeRP:
+		return "RP"
+	case dns.TypeRT:
+		return "RT"
+	case dns.TypeSPF:
+		return "SPF"
+	case dns.TypeSSHFP:
+		return "SSHFP"
+	case dns.TypeTA:
+		return "TA"
+	case dns.TypeTSIG:
+		return "TSIG"
+	case dns.TypeURI:
+		return "URI"
+	case dns.TypeX25:
+		return "X25"
 	default:
 		return "UNKNOWN"
 	}
