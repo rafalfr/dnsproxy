@@ -455,6 +455,8 @@ func getQueryType(queryType uint16) string {
 		return "URI"
 	case dns.TypeX25:
 		return "X25"
+	case 65:
+		return "HTTPS"
 	default:
 		return strconv.Itoa(int(queryType))
 	}
