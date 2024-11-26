@@ -209,6 +209,8 @@ func AddressToUpstream(addr string, opts *Options) (u Upstream, err error) {
 		return nil, err
 	}
 
+	opts.Timeout = 10 * time.Second // rafal code
+	opts.PreferIPv6 = true          // rafal code
 	return urlToUpstream(uu, opts)
 }
 
@@ -403,7 +405,7 @@ func newDialerInitializer(u *url.URL, opts *Options) (di DialerInitializer) {
 	}
 
 	return func() (h bootstrap.DialHandler, err error) {
-		return bootstrap.ResolveDialContext(u, opts.Timeout, boot, true, l) // rafal code, true value to prefer
+		return bootstrap.ResolveDialContext(u, opts.Timeout, boot, opts.PreferIPv6, l) // rafal code, true value to prefer
 		// use IPv6 to connect to upstream servers
 	}
 }
