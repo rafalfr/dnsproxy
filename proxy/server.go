@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -294,6 +295,15 @@ func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 				} else if answer.Header().Rrtype == dns.TypeAAAA {
 					ipAddress = answer.(*dns.AAAA).AAAA.String()
 					break
+				} else if answer.Header().Rrtype == dns.TypeNS {
+					ipAddress = answer.(*dns.NS).Ns
+					break
+				} else if answer.Header().Rrtype == dns.TypeMX {
+					ipAddress = answer.(*dns.MX).Mx
+					break
+				} else if answer.Header().Rrtype == dns.TypeTXT {
+					ipAddress = answer.(*dns.TXT).Txt[0]
+					break
 				}
 			}
 			ipAddress = strings.Trim(ipAddress, " \n\t")
@@ -305,7 +315,13 @@ func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 					upstreamHost = u.Host
 				}
 				upstreamHost = strings.Trim(upstreamHost, " \n\t")
-				message := fmt.Sprintf("A#%-10d%-50.49s%-30.30s from %-60.60s\n", numAnswers.Load(), answerDomain, ipAddress, utils.ShortText(upstreamHost, 50))
+				lastColonIndex := strings.LastIndex(upstreamHost, ":")
+				sourceAddress := ""
+				if lastColonIndex != -1 {
+					sourceAddress = upstreamHost[:lastColonIndex]
+					sourceAddress = strings.Trim(sourceAddress, " \n\t ")
+				}
+				message := fmt.Sprintf("A#%-10d%-50.49s%-35.35s from %s", numAnswers.Load(), answerDomain, ipAddress, utils.ShortText(sourceAddress, 50))
 				if SM.Exists("resolvers::" + upstreamHost) {
 					SM.Set("resolvers::"+upstreamHost, SM.Get("resolvers::"+upstreamHost).(uint64)+1)
 				} else {
@@ -319,7 +335,7 @@ func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 				} else {
 					SM.Set("local::num_cache_and_blocked_responses", uint64(1))
 				}
-				message := fmt.Sprintf("A#%-10d%-50.49s%-30.30s from cache (#%d)\n", numAnswers.Load(), answerDomain, ipAddress, numCacheHits.Load())
+				message := fmt.Sprintf("A#%-10d%-50.49s%-35.35s from cache (#%d)", numAnswers.Load(), answerDomain, ipAddress, numCacheHits.Load())
 				p.logger.Info(message)
 			}
 		}
@@ -327,8 +343,13 @@ func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 		if len(m.Question) > 0 {
 			numQueries.Add(1)
 			sourceAddress := d.Addr.String()
+			lastColonIndex := strings.LastIndex(sourceAddress, ":")
+			if lastColonIndex != -1 {
+				sourceAddress = sourceAddress[:lastColonIndex]
+				sourceAddress = strings.Trim(sourceAddress, " \n\t ")
+			}
 			questionString := m.Question[0].Name + ":" + getQueryType(m.Question[0].Qtype)
-			message := fmt.Sprintf("Q#%-10d%-80.80s from %-40.40s\n", numQueries.Load(), questionString, sourceAddress)
+			message := fmt.Sprintf("Q#%-10d%-85.85s from %s", numQueries.Load(), questionString, sourceAddress)
 			p.logger.Info(message)
 		}
 	}
@@ -435,7 +456,7 @@ func getQueryType(queryType uint16) string {
 	case dns.TypeX25:
 		return "X25"
 	default:
-		return "UNKNOWN"
+		return strconv.Itoa(int(queryType))
 	}
 }
 
