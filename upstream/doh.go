@@ -37,11 +37,11 @@ const (
 	// dohMaxConnsPerHost controls the maximum number of connections for
 	// each host.  Note, that setting it to 1 may cause issues with Go's http
 	// implementation, see https://github.com/AdguardTeam/dnsproxy/issues/278.
-	dohMaxConnsPerHost = 2
+	dohMaxConnsPerHost = 4 // rafal code
 
 	// dohMaxIdleConns controls the maximum number of connections being idle
 	// at the same time.
-	dohMaxIdleConns = 2
+	dohMaxIdleConns = 4 // rafal code
 )
 
 // dnsOverHTTPS is a struct that implements the Upstream interface for the
@@ -468,7 +468,10 @@ func (p *dnsOverHTTPS) createTransport() (t http.RoundTripper, err error) {
 		// Since we have a custom DialContext, we need to use this field to make
 		// golang http.Client attempt to use HTTP/2. Otherwise, it would only be
 		// used when negotiated on the TLS level.
-		ForceAttemptHTTP2: true,
+		ForceAttemptHTTP2:     true,
+		TLSHandshakeTimeout:   10 * time.Second, // rafal code
+		ResponseHeaderTimeout: 10 * time.Second, // rafal code
+		ExpectContinueTimeout: 1 * time.Second,  // rafal code
 	}
 
 	// Explicitly configure transport to use HTTP/2.

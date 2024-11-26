@@ -197,6 +197,8 @@ type configuration struct {
 	DomainsExcludedFromBlockingLists []string `yaml:"domains_excluded_from_blocking" long:"domains_excluded_from_blocking" description:"A list of domains to be excluded from blocking lists (can be specified multiple times)."`
 
 	ExcludedFromCachingLists []string `yaml:"domains_excluded_from_caching" long:"domains_excluded_from_caching" description:"The list of domains to be excluded from caching (can be specified multiple times)."`
+
+	AdditionalBlockedDomains []string `yaml:"additional_blocked_domains" long:"additional_blocked_domains" description:"The list of additional domains to be blocked (can be specified multiple times)."`
 	///////////////////////////////////////////////////////////////////////////////
 	// end rafal code
 

@@ -5,7 +5,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
-	"github.com/AdguardTeam/golibs/log"
+	//"github.com/AdguardTeam/golibs/log"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -87,7 +87,7 @@ func ResolveDialContext(
 
 	addrs := make([]string, 0, len(ips))
 	for _, ip := range ips {
-		log.Printf("host:%s => %s\n", u.Host, ip.String())
+		//log.Printf("host:%s => %s\n", u.Host, ip.String())	// rafal code
 		addrs = append(addrs, netip.AddrPortFrom(ip, port).String())
 	}
 
@@ -108,7 +108,8 @@ func NewDialContext(timeout time.Duration, l *slog.Logger, addrs ...string) (h D
 	}
 
 	dialer := &net.Dialer{
-		Timeout: timeout,
+		Timeout:   timeout,
+		KeepAlive: 30 * time.Second, // rafal code
 	}
 
 	return func(ctx context.Context, network Network, _ string) (conn net.Conn, err error) {
