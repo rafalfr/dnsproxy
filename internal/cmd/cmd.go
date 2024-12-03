@@ -1,5 +1,6 @@
-// Package cmd is the dnsproxy CLI entry point.
 package cmd
+
+// Package cmd is the dnsproxy CLI entry point.
 
 import (
 	"context"
@@ -9,11 +10,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-co-op/gocron"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -128,6 +132,7 @@ func runProxy(ctx context.Context, l *slog.Logger, conf *configuration) (err err
 	proxy.SM.LoadStats("stats.json")
 
 	dnsProxy.PreferIPv6 = true
+	getGatewayIPs()
 
 	for _, domain := range conf.DomainsExcludedFromBlockingLists {
 		proxy.Edm.AddDomain(domain)
@@ -153,6 +158,10 @@ func runProxy(ctx context.Context, l *slog.Logger, conf *configuration) (err err
 	_, err = s.Every(1).Day().At("02:15").Do(func() { proxy.SM.SaveStats("stats.json") })
 	if err != nil {
 		log.Error("Can't start stats periodic save at 02:15.")
+	}
+	_, err = s.Every(1).Hour().Do(func() { getGatewayIPs() })
+	if err != nil {
+		log.Error("Can't start getGatewayIPs.")
 	}
 
 	//_, err = s.Every(1).Day().At("02:20").Do(func() { proxy.FinishSignal <- true })
@@ -236,3 +245,29 @@ func runPprof(l *slog.Logger) {
 		}
 	}()
 }
+
+// rafal code
+// getGatewayIPs runs the `ip route get` command for the IPv4 and IPv6 address
+// families to determine the gateway IP addresses of the system.  It is called
+// by the `main` function.
+func getGatewayIPs() {
+
+	out, err := exec.Command("/bin/ip", "route", "get", "1.1.1.1").Output()
+	if err != nil {
+		proxy.GatewayIPv4 = ""
+	}
+	parts := strings.Split(string(out), " ")
+	ip := strings.Trim(parts[2], " \n")
+	proxy.GatewayIPv4 = net.ParseIP(ip).String()
+
+	out, err = exec.Command("/bin/ip", "route", "get", "2620:fe::fe").Output()
+	if err != nil {
+		proxy.GatewayIPv6 = ""
+	}
+	parts = strings.Split(string(out), " ")
+	ip = strings.Trim(parts[4], " \n")
+	interfaceName := strings.Trim(parts[6], " \n")
+	proxy.GatewayIPv6 = net.ParseIP(ip).String() + "%" + interfaceName
+}
+
+// end of rafal code

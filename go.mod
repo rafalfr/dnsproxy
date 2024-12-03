@@ -3,7 +3,7 @@ module github.com/AdguardTeam/dnsproxy
 go 1.23.3
 
 require (
-	github.com/AdguardTeam/golibs v0.30.3
+	github.com/AdguardTeam/golibs v0.30.5
 	github.com/ameshkov/dnscrypt/v2 v2.3.0
 	github.com/ameshkov/dnsstamps v1.0.3
 	github.com/barweiss/go-tuple v1.1.2
@@ -57,7 +57,7 @@ require (
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
 	github.com/aead/poly1305 v0.0.0-20180717145839-3fee0db0b635 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/google/pprof v0.0.0-20241122213907-cbe949e5a41b // indirect
+	github.com/google/pprof v0.0.0-20241203143554-1e3fdc7de467 // indirect
 	github.com/onsi/ginkgo/v2 v2.22.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect

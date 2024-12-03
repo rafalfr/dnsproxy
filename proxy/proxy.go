@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"github.com/AdguardTeam/dnsproxy/utils"
 	"github.com/ameshkov/dnscrypt/v2"
 	"github.com/quic-go/quic-go"
 	"io"
@@ -41,6 +42,9 @@ const (
 // rafal code
 // //////////////////////////////////////////////////////////////////////////////
 const retryNoError = 60
+
+var GatewayIPv4 string
+var GatewayIPv6 string
 
 ////////////////////////////////////////////////////////////////////////////////
 // end rafal code
@@ -517,6 +521,29 @@ func (p *Proxy) selectUpstreams(d *DNSContext) (upstreams []upstream.Upstream, i
 	q := d.Req.Question[0]
 	host := q.Name
 
+	// rafal code
+	//////////////////////////////////////////////////////////////////////////
+	parts := strings.Split(host, ".")
+	if len(parts) == 2 {
+		upstreams := make([]upstream.Upstream, 0)
+		var err error = nil
+		var gatewayUpstream upstream.Upstream
+		if GatewayIPv6 != "" {
+			gatewayUpstream, err = upstream.AddressToUpstream(GatewayIPv6, nil)
+		} else if GatewayIPv4 != "" {
+			gatewayUpstream, err = upstream.AddressToUpstream(GatewayIPv4, nil)
+		} else {
+			err = errors.Error("")
+		}
+
+		if err == nil {
+			upstreams = append(upstreams, gatewayUpstream)
+			return upstreams, true
+		}
+	}
+	//////////////////////////////////////////////////////////////////////////
+	// end of rafal code
+
 	if d.RequestedPrivateRDNS != (netip.Prefix{}) || p.shouldStripDNS64(d.Req) {
 		// Use private upstreams.
 		private := p.PrivateRDNSUpstreamConfig
@@ -542,7 +569,17 @@ func (p *Proxy) selectUpstreams(d *DNSContext) (upstreams []upstream.Upstream, i
 	}
 
 	// Use configured.
-	return getUpstreams(p.UpstreamConfig, host), false
+	upstreams = getUpstreams(p.UpstreamConfig, host)
+
+	// rafal code
+	//////////////////////////////////////////////////////////////////////////
+	if upstreams != nil && len(upstreams) > 0 {
+		randomIndex, _ := utils.GetRandomValue(0, int64(len(upstreams)))
+		upstreams = upstreams[randomIndex : randomIndex+1]
+	}
+	////////////////////////////////////////////////////////////////////////
+
+	return upstreams, false
 }
 
 // replyFromUpstream tries to resolve the request via configured upstream
@@ -743,16 +780,20 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 		// See https://github.com/imp/dnsmasq/blob/770bce967cfc9967273d0acfb3ea018fb7b17522/src/forward.c#L1169-L1172.
 		//
 
-		// TODO (rafal)
+		// rafal code
 		////////////////////////////////////////////////////////////////////////////////
 		if cacheWorks && ok && !dctx.Res.CheckingDisabled {
-			ok, queryDomain = Efcm.checkDomain(queryDomain)
-			if !ok {
-				// Cache the response with DNSSEC RRs.
-				p.cacheResp(dctx)
+			parts := strings.Split(dctx.Req.Question[0].Name, ".")
+			if len(parts) > 2 {
+				ok, queryDomain = Efcm.checkDomain(queryDomain)
+				if !ok {
+					// Cache the response with DNSSEC RRs.
+					p.cacheResp(dctx)
+				}
 			}
 		}
 		///////////////////////////////////////////////////////////////////////////////
+		// end rafal code
 	}
 
 	// It is possible that the response is nil if the upstream hasn't been
