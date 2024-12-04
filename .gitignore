@@ -25,3 +25,4 @@ stats.json
 *.sh
 *.conf
 *.txt
+*.log
