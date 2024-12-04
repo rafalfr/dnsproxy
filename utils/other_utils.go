@@ -38,3 +38,14 @@ func ShortText(s string, maxLen int) string {
 	}
 	return strings.ToValidUTF8(s[:maxLen+1], "")
 }
+
+func IsLocalHost(host string) bool {
+
+	if strings.HasSuffix(host, ".") {
+		host = host[:len(host)-1]
+	}
+	if len(strings.Split(host, ".")) <= 1 {
+		return true
+	}
+	return false
+}
