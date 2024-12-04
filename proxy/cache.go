@@ -18,7 +18,7 @@ import (
 )
 
 // defaultCacheSize is the size of cache in bytes by default.
-const defaultCacheSize = 4 * 1024 * 1024 // rafal code
+const defaultCacheSize = 16 * 1024 * 1024 // rafal code
 
 // cache is used to cache requests and used upstreams.
 type cache struct {
