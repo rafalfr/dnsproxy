@@ -255,19 +255,37 @@ func getGatewayIPs() {
 	out, err := exec.Command("/bin/ip", "route", "get", "1.1.1.1").Output()
 	if err != nil {
 		proxy.GatewayIPv4 = ""
+	} else {
+		parts := strings.Split(string(out), " ")
+		if len(parts) > 6 {
+			ip := strings.Trim(parts[2], " \n")
+			if net.ParseIP(ip) != nil {
+				proxy.GatewayIPv4 = net.ParseIP(ip).String()
+			} else {
+				proxy.GatewayIPv4 = ""
+			}
+		} else {
+			proxy.GatewayIPv4 = ""
+		}
 	}
-	parts := strings.Split(string(out), " ")
-	ip := strings.Trim(parts[2], " \n")
-	proxy.GatewayIPv4 = net.ParseIP(ip).String()
 
 	out, err = exec.Command("/bin/ip", "route", "get", "2620:fe::fe").Output()
 	if err != nil {
 		proxy.GatewayIPv6 = ""
+	} else {
+		parts := strings.Split(string(out), " ")
+		if len(parts) > 6 {
+			ip := strings.Trim(parts[4], " \n")
+			interfaceName := strings.Trim(parts[6], " \n")
+			if net.ParseIP(ip) != nil {
+				proxy.GatewayIPv6 = net.ParseIP(ip).String() + "%" + interfaceName
+			} else {
+				proxy.GatewayIPv6 = ""
+			}
+		} else {
+			proxy.GatewayIPv6 = ""
+		}
 	}
-	parts = strings.Split(string(out), " ")
-	ip = strings.Trim(parts[4], " \n")
-	interfaceName := strings.Trim(parts[6], " \n")
-	proxy.GatewayIPv6 = net.ParseIP(ip).String() + "%" + interfaceName
 }
 
 // end of rafal code
