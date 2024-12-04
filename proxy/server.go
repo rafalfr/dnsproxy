@@ -302,9 +302,22 @@ func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 					ipAddress = answer.(*dns.MX).Mx
 					break
 				} else if answer.Header().Rrtype == dns.TypeTXT {
-					ipAddress = answer.(*dns.TXT).Txt[0]
+					if len(answer.(*dns.TXT).Txt) > 0 {
+						ipAddress = answer.(*dns.TXT).Txt[0]
+					}
+					break
+				} else if answer.Header().Rrtype == dns.TypeSOA {
+					ipAddress = answer.(*dns.SOA).Ns
+					break
+				} else if answer.Header().Rrtype == dns.TypeHTTPS {
+					for _, alpn := range answer.(*dns.HTTPS).Value {
+						ipAddress += alpn.String()
+					}
 					break
 				}
+			}
+			if ipAddress == "" {
+				ipAddress = m.Answer[0].String()
 			}
 			ipAddress = strings.Trim(ipAddress, " \n\t")
 			if d.Upstream != nil {
@@ -455,7 +468,7 @@ func getQueryType(queryType uint16) string {
 		return "URI"
 	case dns.TypeX25:
 		return "X25"
-	case 65:
+	case dns.TypeHTTPS:
 		return "HTTPS"
 	default:
 		return strconv.Itoa(int(queryType))
