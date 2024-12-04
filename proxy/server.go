@@ -316,9 +316,6 @@ func (p *Proxy) mylogDNSMessage(d *DNSContext, messageType string) {
 					break
 				}
 			}
-			if ipAddress == "" {
-				ipAddress = m.Answer[0].String()
-			}
 			ipAddress = strings.Trim(ipAddress, " \n\t")
 			if d.Upstream != nil {
 				upstreamAddress := d.Upstream.Address()
