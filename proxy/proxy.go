@@ -779,6 +779,8 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 		//
 		// See https://github.com/imp/dnsmasq/blob/770bce967cfc9967273d0acfb3ea018fb7b17522/src/forward.c#L1169-L1172.
 
+		// rafal code
+		////////////////////////////////////////////////////////////////////////////////
 		if dctx.Res != nil && dctx.Res.Answer != nil && len(dctx.Res.Answer) > 0 && dctx.Res.Answer[0].Header().Rrtype == dns.TypeAAAA {
 			if utils.IsLocalHost(queryDomain) == true {
 				for _, rr := range dctx.Res.Answer {
@@ -787,8 +789,6 @@ func (p *Proxy) Resolve(dctx *DNSContext) (err error) {
 			}
 		}
 
-		// rafal code
-		////////////////////////////////////////////////////////////////////////////////
 		if cacheWorks && ok && !dctx.Res.CheckingDisabled {
 			if utils.IsLocalHost(queryDomain) == false {
 				ok, queryDomain = Efcm.checkDomain(queryDomain)

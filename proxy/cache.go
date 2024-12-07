@@ -107,7 +107,7 @@ func (ci *cacheItem) pack() (packed []byte) {
 }
 
 // optimisticTTL is the default TTL for expired cached responses in seconds.
-const optimisticTTL = 12 * 3600
+const optimisticTTL = 12 * 3600 // rafal code
 
 // unpackItem converts the data into cacheItem using req as a request message.
 // expired is true if the item exists but expired.  The expired cached items are
