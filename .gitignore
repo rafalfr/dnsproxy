@@ -17,6 +17,7 @@ example.crt
 example.key
 coverage.txt
 stats.json
+parked_domains.json
 *.yaml
 *.key
 *.crt
