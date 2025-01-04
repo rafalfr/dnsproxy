@@ -1,0 +1,19 @@
+{
+  "domains": [
+    {
+      "name": "(.*).serwis-lodowek-krakow.biz",
+      "mname": "nanopineo2@freeddns.net",
+      "rname": "admin.serwis-lodowek-krakow.biz",
+      "serial": "1",
+      "refresh": 86400,
+      "retry":  7200,
+      "expire": 4000000,
+      "ttl":    11200,
+      "mbox":   "",
+      "ns":     "nanopineo2@freeddns.net",
+      "mx":     "",
+      "a":      "1.1.1.1",
+      "aaaa"    "fe::"
+    }
+  ]
+}
