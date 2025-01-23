@@ -18,7 +18,6 @@ import (
 	"github.com/AdguardTeam/dnsproxy/proxy"
 	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/AdguardTeam/golibs/errors"
-	"github.com/AdguardTeam/golibs/hostsfile"
 	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/osutil"
@@ -40,17 +39,18 @@ func createProxyConfig(
 		return nil, err
 	}
 
-	reqHdlr, err := handler.NewDefault(&handler.DefaultConfig{
+	hosts, err := handler.ReadHosts(hostsFiles)
+	if err != nil {
+		return nil, fmt.Errorf("reading hosts files: %w", err)
+	}
+
+	reqHdlr := handler.NewDefault(&handler.DefaultConfig{
 		Logger: l.With(slogutil.KeyPrefix, "default_handler"),
 		// TODO(e.burkov):  Use the configured message constructor.
 		MessageConstructor: dnsmsg.DefaultMessageConstructor{},
 		HaltIPv6:           conf.IPv6Disabled,
-		HostsFiles:         hostsFiles,
-		FileSystem:         osutil.RootDirFS(),
+		HostsFiles:         hosts,
 	})
-	if err != nil {
-		return nil, fmt.Errorf("creating default handler: %w", err)
-	}
 
 	proxyConf = &proxy.Config{
 		Logger: l, // rafal code,
@@ -135,7 +135,7 @@ func (conf *configuration) initUpstreams(
 		}
 	}
 
-	timeout := conf.Timeout.Duration
+	timeout := time.Duration(conf.Timeout)
 	bootOpts := &upstream.Options{
 		Logger:             l,
 		HTTPVersions:       httpVersions,
@@ -517,7 +517,7 @@ func (conf *configuration) hostsFiles(ctx context.Context, l *slog.Logger) (path
 		return conf.HostsFiles, nil
 	}
 
-	paths, err = hostsfile.DefaultHostsPaths()
+	paths, err = proxynetutil.DefaultHostsPaths()
 	if err != nil {
 		return nil, fmt.Errorf("getting default hosts files: %w", err)
 	}

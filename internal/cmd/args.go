@@ -221,11 +221,10 @@ var commandLineOptions = []*commandLineOption{
 		valueType: "subnet",
 	},
 	hostsFilesIdx: {
-		description: "List of paths to the hosts files relative to the root, can be specified " +
-			"multiple times.",
-		long:      "hosts-files",
-		short:     "",
-		valueType: "path",
+		description: "List of paths to the hosts files, can be specified multiple times.",
+		long:        "hosts-files",
+		short:       "",
+		valueType:   "path",
 	},
 	timeoutIdx: {
 		description: "Timeout for outbound DNS queries to remote upstream servers in a " +
@@ -449,6 +448,12 @@ func parseCmdLineOptions(conf *configuration) (err error) {
 	if err != nil {
 		// Don't wrap the error, because it's informative enough as is.
 		return err
+	}
+
+	nonFlags := flags.Args()
+	if len(nonFlags) > 0 {
+		return fmt.Errorf("positional arguments are not allowed, please check your command line "+
+			"arguments; detected positional arguments: %s", nonFlags)
 	}
 
 	return nil
