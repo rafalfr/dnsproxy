@@ -9,7 +9,7 @@ package main
 // cache.go: const optimisticTTL, const defaultCacheSize
 // config.go: additional parameters
 // end of rafal code
-// finish domain hosting
+// finish parked domains hosting
 
 import (
 	"github.com/AdguardTeam/dnsproxy/internal/cmd"
