@@ -1,9 +1,9 @@
 module github.com/AdguardTeam/dnsproxy
 
-go 1.23.5
+go 1.23.4
 
 require (
-	github.com/AdguardTeam/golibs v0.32.0
+	github.com/AdguardTeam/golibs v0.31.0
 	github.com/ameshkov/dnscrypt/v2 v2.3.0
 	github.com/ameshkov/dnsstamps v1.0.3
 	github.com/barweiss/go-tuple v1.1.2
@@ -12,7 +12,7 @@ require (
 	github.com/golang-collections/collections v0.0.0-20130729185459-604e922904d3
 	github.com/miekg/dns v1.1.62
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/quic-go/quic-go v0.48.2
+	github.com/quic-go/quic-go v0.49.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
 	golang.org/x/net v0.34.0
