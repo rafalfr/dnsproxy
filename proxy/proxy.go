@@ -598,7 +598,7 @@ func (p *Proxy) replyFromUpstream(d *DNSContext) (ok bool, err error) {
 		p.recDetector.add(d.Req)
 	}
 
-	start := time.Now()
+	//start := time.Now()
 	//src := "upstream"	// rafal
 	src := "upstream"
 	wrapped := upstreamsWithStats(upstreams)
@@ -634,7 +634,7 @@ func (p *Proxy) replyFromUpstream(d *DNSContext) (ok bool, err error) {
 	}
 
 	if resp != nil {
-		d.QueryDuration = time.Since(start)
+		//d.QueryDuration = time.Since(start)
 		//p.logger.Debug("resolved", "src", src, "rtt", d.QueryDuration)
 		p.logger.Debug("resolved", "src", src)
 	}
