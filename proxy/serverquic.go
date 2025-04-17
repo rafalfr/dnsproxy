@@ -67,7 +67,6 @@ func (p *Proxy) initQUICListeners(ctx context.Context) (err error) {
 	for _, a := range p.QUICListenAddr {
 		//p.logger.Info("creating quic listener", "addr", a)
 
-		conn, err := net.ListenUDP(bootstrap.NetworkUDP, a)
 		var conn *net.UDPConn
 		var ln *quic.EarlyListener
 		var tr *quic.Transport
