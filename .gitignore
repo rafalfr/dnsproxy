@@ -16,6 +16,7 @@ dnsproxy.exe
 example.crt
 example.key
 coverage.txt
+rafal_modifications.txt
 stats.json
 parked_domains.json
 *.yaml
