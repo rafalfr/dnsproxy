@@ -24,6 +24,17 @@
 # https://www.baeldung.com/linux/add-self-signed-certificate-trusted-list
 # https://github.com/ChristianLempa/cheat-sheets/blob/main/misc/ssl-certs.md
 # https://www.ipfire.org/docs/dns/public-servers
+
+# before update and commit
+# go get -u
+# go get -u ./...
+# go mod tidy
+
+# optionally before build
+# go clean -modcache
+
+# go list -u -f '{{if (and (not (or .Main .Indirect)) .Update)}}{{.Path}}: {{.Version}} -> {{.Update.Version}}{{end}}' -m all 2> /dev/null
+
 ---
 bootstrap:
   - "9.9.9.9:53"
